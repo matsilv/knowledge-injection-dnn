@@ -294,6 +294,15 @@ if VISUALIZE:
 if MODEL_TYPE not in ['agnostic', 'sbrinspiredloss', 'confidences']:
     raise Exception("Model type not valid")
     exit(1)
+
+# Load confidence scores if the model type is confidences
+if MODEL_TYPE == 'confidences':
+    path = "plots/random/rows-and-columns-prop/random_feasibility.csv"
+    confidences_score = np.genfromtxt('{}'.format(path), delimiter=',')
+    confidences_score = np.insert(confidences_score, 0, 1.0)
+    confidences = utility.from_penalties_to_confidences(X, penalties, Y, confidences_score)
+    dataset = tf.data.Dataset.from_tensor_slices((X, Y, confidences))
+
 model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, method=MODEL_TYPE)
 
 # Model name for both training and test

@@ -108,7 +108,7 @@ class MyModel(tf.keras.Model):
 
         # binary cross-entropy
         binary_cross_entropy = tf.reduce_mean(
-            tf.keras.losses.binary_crossentropy(tensor_y + tensor_p, y_pred, from_logits=True))
+            tf.keras.losses.binary_crossentropy(tensor_p, y_pred, from_logits=True))
 
         if self.method == 'sbrinspiredloss':
             loss = cross_entropy_loss + sbr_inspired_loss
@@ -119,7 +119,7 @@ class MyModel(tf.keras.Model):
 
         return loss, cross_entropy_loss, sbr_inspired_loss
 
-    @tf.function
+    #@tf.function
     def predict(self, x):
         """
         Predict from input tensors.
@@ -172,7 +172,7 @@ class MyModel(tf.keras.Model):
             # Training loop - using batches
             for x, y, p in train_ds:
 
-                ''' idx = 50
+                '''idx = 40
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
@@ -186,7 +186,7 @@ class MyModel(tf.keras.Model):
                     for j in range(10):
                         print(p_numpy[i,j])
                     print()
-                exit(0) '''
+                exit(0)'''
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 

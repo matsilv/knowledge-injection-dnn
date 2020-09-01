@@ -867,7 +867,6 @@ def read_solutions_from_csv(filename, dim):
         # count of examined solutions
         count_solutions = 0
 
-
         for line in csv_reader:
             if len(line) != dim ** 3:
               continue
@@ -1032,7 +1031,50 @@ def compute_feasibility_from_predictions(X, preds, dim):
 
     return feas_count / X.shape[0]
 
+########################################################################################################################
 
+
+def from_penalties_to_confidences(partial_solutions, penalties, labels, confidences):
+    """
+    Transform penalties to confidence scores.
+    :param partial_solutions: an array of shape (size, dim**3) representing the one-hot encoding
+    :param penalties: an array of shape (size, dim**3) of 0 and 1, where 1 means provably infeasible value domain;
+                        as numpy array.
+    :param labels: an array of shape (batch_size, dim**3) with all zeros and a 1, which correspnd to a global feasible
+                    assignment; as numpy array
+    :param confidences: an array of shape dim**2 where each element represents the feasibility ratio of partial
+                        solutions with a number of assigned variables corresponding to the position in the array.
+    :return: a numpy array with confidences scores of shape (size, dim**3); as numpy array
+    """
+
+    confidence_scores = np.zeros_like(penalties, dtype=np.float32)
+    count = 0
+
+    for partial_sol, penalty, label in zip(partial_solutions, penalties, labels):
+        num_assigned_vars = np.sum(partial_sol)
+        assert (0 <= num_assigned_vars <= 99), "Unexpected error: the number of assigned variables must be in the " \
+                                               "range [0, 99]"
+        confidence_scores[count] = (1 - penalty) * confidences[num_assigned_vars]
+
+        feas_assign = np.argmax(label)
+        confidence_scores[count, feas_assign] = 1
+
+        '''print('-------------------- Partial solution -------------------------')
+        visualize(partial_sol.reshape(10, 10, 10))
+        print()
+        print('-------------------- Label -------------------------')
+        visualize(label.reshape(10, 10, 10))
+        print()
+        print('-------------------- Confidences -------------------------')
+        for i in range(10):
+            for j in range(10):
+                print(confidence_scores[count].reshape(10, 10, 10)[i, j])
+            print()
+        print('------------------------------------------------------------------')'''
+
+        count += 1
+
+    return confidence_scores
 
 ########################################################################################################################
 if __name__ == '__main__':
