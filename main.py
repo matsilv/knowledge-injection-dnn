@@ -74,7 +74,7 @@ parser.add_argument("--num-sol", type=str, default="10k",
                          + "with k (for example 10000=10k)")
 parser.add_argument("--penalties-type", default=None, choices=["multi", "domains"],
                     help="Penalties type to be used both for training and test")
-parser.add_argument("--model-type", default="agnostic", choices=["agnostic", "sbrinspiredloss"],
+parser.add_argument("--model-type", default="agnostic", choices=["agnostic", "sbrinspiredloss", "confidences"],
                     help="Choose the model type. agnostic is a simple Sequential model full agnostic. sbrinspiredloss "
                          + "envelops the SBR-inspired loss function.")
 parser.add_argument("--validation-size", type=int, default=0,
@@ -157,11 +157,15 @@ label = "net trained on {} ds".format(label_name)
 
 if mode == "test":
     mode_char = "L"
+    SOL_TYPE = "UNIQUES"
 else:
     mode_char = "B"
 
 if ORIGINAL:
-    file_name = "pls{}_{}".format(DIM, args.num_sol)
+    if not TRAIN:
+        file_name = "pls{}_10k".format(DIM)
+    else:
+        file_name = "pls{}_{}".format(DIM, args.num_sol)
 else:
     file_name = "pls{}_checker_rule_size_{}".format(DIM, SIZE)
 
@@ -179,15 +183,12 @@ if VAL_SIZE > 0:
     init_val_prob = val_problem.copy()
 
     # Load from test data
-    load_path = "datasets/pls{}/DS.PLS.A.{}.L.4.{}.txt".format(DIM, SOL_TYPE, file_name)
+    load_path = "datasets/pls{}/DS.PLS.A.UNIQUES.L.4.pls{}_10k.txt".format(DIM, DIM)
 
     print("Loading validation data from {}".format(load_path))
     start_time = time.time()
 
-    if args.leave_columns_domains:
-        domains_filename = "datasets/pls{}/rows_propagation_domains_test_{}.csv".format(DIM, args.num_sol)
-    else:
-        domains_filename = "datasets/pls{}/domains_test_{}.csv".format(DIM, args.num_sol)
+    domains_filename = "datasets/pls{}/domains_test_10k.csv".format(DIM)
 
     X_val, Y_val = utility.load_dataset(load_path, val_problem, max_size=math.inf, mode=LOAD_MODE, save_domains=SAVE_DOMAINS,
                                 domains_filename=domains_filename)
@@ -230,16 +231,21 @@ init_prob = problem.copy()
 
 # Load training data
 load_path = "datasets/pls{}/DS.PLS.A.{}.{}.4.{}.txt".format(DIM, SOL_TYPE, mode_char, file_name)
+if not TRAIN:
+    load_path = "datasets/pls{}/DS.PLS.A.UNIQUES.L.4.{}.txt".format(DIM, file_name)
 
 print("Loading data from {}".format(load_path))
 start_time = time.time()
 domains_filename = "datasets/pls{}/domains_{}_{}.csv".format(DIM, mode, args.num_sol)
+if not TRAIN:
+    domains_filename = "datasets/pls{}/domains_{}_10k.csv".format(DIM, mode)
 
 if args.leave_columns_domains:
     domains_filename = "datasets/pls{}/rows_propagation_domains_{}_{}.csv".format(DIM, mode, args.num_sol)
 
 X, Y = utility.load_dataset(load_path, problem, max_size=MAX_SIZE, mode=LOAD_MODE, save_domains=SAVE_DOMAINS,
-                            domains_filename=domains_filename, save_partial_solutions=False, partial_sols_filename="datasets/pls10/partial_sols_pls10_num_assigned_40.csv")
+                            domains_filename=domains_filename, save_partial_solutions=False,
+                            partial_sols_filename="datasets/pls10/partial_sols_pls10_num_assigned_40.csv")
 end_time = time.time()
 print("Elapsed {} sec".format(end_time - start_time))
 
@@ -265,6 +271,7 @@ elif args.penalties_type == "multi":
 # Cast numpy array to int8 to save memory
 X = X.astype(np.int8)
 Y = Y.astype(np.int8)
+
 if args.penalties_type is not None:
     penalties = penalties.astype(np.int8)
 else:
@@ -284,13 +291,10 @@ if VISUALIZE:
     utility.visualize_dataset(X, Y, exit_end=VISUALIZE)
 
 # Create the model
-elif MODEL_TYPE == "sbrinspiredloss":
-    model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, sbr=True)
-elif MODEL_TYPE == "agnostic":
-    model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3)
-else:
+if MODEL_TYPE not in ['agnostic', 'sbrinspiredloss', 'confidences']:
     raise Exception("Model type not valid")
     exit(1)
+model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, method=MODEL_TYPE)
 
 # Model name for both training and test
 if not SPECIALIZED:

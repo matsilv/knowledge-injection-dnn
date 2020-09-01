@@ -12,14 +12,14 @@ from utility import compute_feasibility_from_predictions, visualize
 ########################################################################################################################
 
 class MyModel(tf.keras.Model):
-    def __init__(self, num_layers, num_hidden, input_shape, output_dim, sbr=False):
+    def __init__(self, num_layers, num_hidden, input_shape, output_dim, method='agnostic'):
         """
         Abstract class implementing fully-connected feedforward NN.
         :param num_layers: number of hidden layers; as integer
         :param num_hidden: number of hidden units for each layer; as a list of integers
         :param input_shape: input shape required by tf.keras; as a tuple
         :param output_dim: number of output neurons; as integer
-        :param sbr: True if you want to add SBR-inspired term to the loss function
+        :param method: method to be applied to the NN; as string
         """
 
         super(MyModel, self).__init__(name="mymodel")
@@ -28,7 +28,10 @@ class MyModel(tf.keras.Model):
         self.num_hidden = num_hidden
         self.output_dim = output_dim
 
-        self.sbr = sbr
+        available_methods = ['agnostic', 'sbrinspiredloss', 'confidences']
+        if method not in available_methods:
+            raise Exception("Method selected not valid")
+        self.method = method
 
         # build the neural net model
         self.__define_model__(input_shape)
@@ -103,10 +106,16 @@ class MyModel(tf.keras.Model):
         # SBR inspired loss
         sbr_inspired_loss = tf.reduce_mean(tf.reduce_sum(tf.square((1 - tensor_p) - tf.nn.sigmoid(y_pred)), axis=1))
 
-        if self.sbr:
+        # binary cross-entropy
+        binary_cross_entropy = tf.reduce_mean(
+            tf.keras.losses.binary_crossentropy(tensor_y + tensor_p, y_pred, from_logits=True))
+
+        if self.method == 'sbrinspiredloss':
             loss = cross_entropy_loss + sbr_inspired_loss
-        else:
+        elif self.method == 'agnostic':
             loss = cross_entropy_loss
+        else:
+            loss = binary_cross_entropy
 
         return loss, cross_entropy_loss, sbr_inspired_loss
 
@@ -163,18 +172,21 @@ class MyModel(tf.keras.Model):
             # Training loop - using batches
             for x, y, p in train_ds:
 
-                '''x_numpy = x.numpy()
+                ''' idx = 50
+
+                x_numpy = x.numpy()
                 y_numpy = y.numpy()
                 p_numpy = p.numpy()
-                p_numpy = p_numpy[120].reshape(10, 10, 10)
-                visualize(x_numpy[120].reshape(10, 10, 10))
+                p_numpy = p_numpy[idx].reshape(10, 10, 10)
+                visualize(x_numpy[idx].reshape(10, 10, 10))
                 print()
-                visualize(y_numpy[120].reshape(10, 10, 10))
+                visualize(y_numpy[idx].reshape(10, 10, 10))
                 print()
                 for i in range(10):
                     for j in range(10):
                         print(p_numpy[i,j])
-                    print() '''
+                    print()
+                exit(0) '''
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 
