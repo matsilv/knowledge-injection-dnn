@@ -12,7 +12,7 @@ from utility import compute_feasibility_from_predictions, visualize
 ########################################################################################################################
 
 class MyModel(tf.keras.Model):
-    def __init__(self, num_layers, num_hidden, input_shape, output_dim, method='agnostic'):
+    def __init__(self, num_layers, num_hidden, input_shape, output_dim, method='agnostic', lmbd=1.0):
         """
         Abstract class implementing fully-connected feedforward NN.
         :param num_layers: number of hidden layers; as integer
@@ -20,6 +20,7 @@ class MyModel(tf.keras.Model):
         :param input_shape: input shape required by tf.keras; as a tuple
         :param output_dim: number of output neurons; as integer
         :param method: method to be applied to the NN; as string
+        :param lmbd: lambda for SBR-inspired loss term
         """
 
         super(MyModel, self).__init__(name="mymodel")
@@ -32,6 +33,9 @@ class MyModel(tf.keras.Model):
         if method not in available_methods:
             raise Exception("Method selected not valid")
         self.method = method
+
+        # Lambda for SBR-inspired loss term
+        self.lmbd = lmbd
 
         # build the neural net model
         self.__define_model__(input_shape)
@@ -108,10 +112,11 @@ class MyModel(tf.keras.Model):
 
         # binary cross-entropy
         binary_cross_entropy = tf.reduce_mean(
-            tf.keras.losses.binary_crossentropy(tensor_p, y_pred, from_logits=True))
+            tf.keras.losses.binary_crossentropy(tensor_y + tensor_p, y_pred, from_logits=True))
 
         if self.method == 'sbrinspiredloss':
-            loss = cross_entropy_loss + sbr_inspired_loss
+            print(self.lmbd)
+            loss = cross_entropy_loss + sbr_inspired_loss * self.lmbd
         elif self.method == 'agnostic':
             loss = cross_entropy_loss
         else:
@@ -119,7 +124,7 @@ class MyModel(tf.keras.Model):
 
         return loss, cross_entropy_loss, sbr_inspired_loss
 
-    #@tf.function
+    @tf.function
     def predict(self, x):
         """
         Predict from input tensors.
@@ -172,7 +177,7 @@ class MyModel(tf.keras.Model):
             # Training loop - using batches
             for x, y, p in train_ds:
 
-                '''idx = 40
+                ''' idx = 11
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
@@ -186,7 +191,7 @@ class MyModel(tf.keras.Model):
                     for j in range(10):
                         print(p_numpy[i,j])
                     print()
-                exit(0)'''
+                exit(0) '''
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 

@@ -867,6 +867,7 @@ def read_solutions_from_csv(filename, dim):
         # count of examined solutions
         count_solutions = 0
 
+
         for line in csv_reader:
             if len(line) != dim ** 3:
               continue
@@ -1216,8 +1217,8 @@ if __name__ == '__main__':
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label1, linestyle='solid')
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label1)
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label1, linestyle='solid')
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label1)
+            ax1.plot(np.arange(len(my_data)), my_data, label=args.label1, linestyle='solid')
+            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label1)
             plt.ylim(0, 1.1)
 
         if path2 is not None:
@@ -1228,8 +1229,8 @@ if __name__ == '__main__':
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label2, linestyle='dotted')
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label2)
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label2, linestyle='dotted')
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label2)
+            ax1.plot(np.arange(len(my_data)), my_data, label=args.label2, linestyle='dotted')
+            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label2)
             plt.ylim(0, 1.1)
         
         if path3 is not None:
@@ -1241,8 +1242,8 @@ if __name__ == '__main__':
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label3, linestyle='dashed')
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label3)
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label3, linestyle='dashed')
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label3)
+            ax1.plot(np.arange(len(my_data)), my_data, label=args.label3, linestyle='dashed')
+            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label3)
             plt.ylim(0, 1.1)
 
         if path4 is not None:
@@ -1254,8 +1255,8 @@ if __name__ == '__main__':
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label4)
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label4)
+            ax1.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
+            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label4)
             plt.ylim(0, 1.1)
 
         if path5 is not None:
@@ -1266,8 +1267,8 @@ if __name__ == '__main__':
             assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label5)
-            #ax2.plot(np.arange(len(my_data)), my_data, label=args.label5, linestyle='solid')
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label5)
+            ax2.plot(np.arange(len(my_data)), my_data, label=args.label5, linestyle='solid')
+            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label5)
             plt.ylim(0, 1.1)
           
         if path6 is not None:
@@ -1278,8 +1279,8 @@ if __name__ == '__main__':
           assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
 
           #plt.plot(np.arange(len(my_data)), my_data, label=args.label6)
-          #ax2.plot(np.arange(len(my_data)), my_data, label=args.label6, linestyle='dotted')
-          ax1.plot(np.arange(len(my_data)), my_data, label=args.label6)
+          ax2.plot(np.arange(len(my_data)), my_data, label=args.label6, linestyle='dotted')
+          #ax1.plot(np.arange(len(my_data)), my_data, label=args.label6)
           plt.ylim(0, 1.1)
 
         if path7 is not None:
@@ -1327,14 +1328,18 @@ if __name__ == '__main__':
 
         ax = sns.lineplot(x='# filled cells', y="Feasibility ratio", hue="Method", style="Method", data=df)
         plt.ylim(0, 1.1)'''
-        ax1.set_title("Feasibility ratio")
-        ax2.set_title("Feasibility ratio")
+        
+        ax1.set_title("Feasibility ratio - rows injection")
+        ax2.set_title("Feasibility ratio - full injection")
         ax1.legend()
         ax2.legend()
         ax1.set_ylim([0, 1.1])
         ax2.set_ylim([0, 1.1])
         ax1.set_xlabel("# filled cells")
         ax2.set_xlabel("# filled cells")
-        plt.legend()
+        
+        ''' plt.xlabel("# of filled cells")
+        plt.ylabel("Feasibility ratio")
+        plt.legend() '''
         plt.savefig(args.plot_title)
 

@@ -84,6 +84,8 @@ parser.add_argument("--use-prop", action="store_true", default=False,
                     help="True if you want to assist the with propagation method during evaluation time." +
                          "A penalty type must be assigned.")
 
+parser.add_argument("--lmbd", default=1.0, type=float, help="Lambda for SBR-inspired term")
+
 args = parser.parse_args()
 ########################################################################################################################
 
@@ -297,13 +299,13 @@ if MODEL_TYPE not in ['agnostic', 'sbrinspiredloss', 'confidences']:
 
 # Load confidence scores if the model type is confidences
 if MODEL_TYPE == 'confidences':
-    path = "plots/random/rows-and-columns-prop/random_feasibility.csv"
+    path = "plots/test-pls-{}-validation/random/rows-and-columns-prop/random_feasibility.csv".format(DIM)
     confidences_score = np.genfromtxt('{}'.format(path), delimiter=',')
     confidences_score = np.insert(confidences_score, 0, 1.0)
     confidences = utility.from_penalties_to_confidences(X, penalties, Y, confidences_score)
     dataset = tf.data.Dataset.from_tensor_slices((X, Y, confidences))
 
-model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, method=MODEL_TYPE)
+model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, method=MODEL_TYPE, lmbd=args.lmbd)
 
 # Model name for both training and test
 if not SPECIALIZED:
@@ -322,7 +324,7 @@ except:
 # Train model
 if TRAIN:
     # Create batches
-    train_dataset = dataset.batch(batch_size=BATCH_SIZE)
+    train_dataset = dataset.shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
     history = model.train(EPOCHS, train_dataset, "models/{}".format(model_name), DIM, validation_set, args.use_prop)
     #tf.saved_model.save(model, "models/{}".format(model_name))
     model.save_weights("models/{}".format(model_name), save_format='tf')
