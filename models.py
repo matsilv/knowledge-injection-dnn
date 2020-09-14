@@ -112,7 +112,7 @@ class MyModel(tf.keras.Model):
 
         # binary cross-entropy
         binary_cross_entropy = tf.reduce_mean(
-            tf.keras.losses.binary_crossentropy(tensor_y + tensor_p, y_pred, from_logits=True))
+            tf.keras.losses.binary_crossentropy(tensor_p, y_pred, from_logits=True))
 
         if self.method == 'sbrinspiredloss':
             print(self.lmbd)
@@ -177,7 +177,7 @@ class MyModel(tf.keras.Model):
             # Training loop - using batches
             for x, y, p in train_ds:
 
-                ''' idx = 11
+                ''' idx = 50
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()

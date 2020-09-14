@@ -15,9 +15,10 @@ import argparse
 import time
 from models import MyModel
 import math
+import sys
 
 # Set seed in order to reproduce results
-# tf.random.set_seed(0)
+#tf.random.set_seed(0)
 
 # Tensorflow 2 GPU setup
 tf.debugging.set_log_device_placement(True)
@@ -279,10 +280,6 @@ if args.penalties_type is not None:
 else:
     penalties = np.zeros_like(X)
 
-if TRAIN:
-    #dataset = tf.data.Dataset.from_tensor_slices((X, Y, domains, multi_assign))
-    dataset = tf.data.Dataset.from_tensor_slices((X, Y, penalties))
-
 # visualize pruning effect with increasing size
 #X, Y, _ = utility.checker_pruning(X, Y, upper_bound=13, visualize=True)
 
@@ -297,13 +294,20 @@ if MODEL_TYPE not in ['agnostic', 'sbrinspiredloss', 'confidences']:
     raise Exception("Model type not valid")
     exit(1)
 
-# Load confidence scores if the model type is confidences
-if MODEL_TYPE == 'confidences':
-    path = "plots/test-pls-{}-validation/random/rows-and-columns-prop/random_feasibility.csv".format(DIM)
-    confidences_score = np.genfromtxt('{}'.format(path), delimiter=',')
-    confidences_score = np.insert(confidences_score, 0, 1.0)
-    confidences = utility.from_penalties_to_confidences(X, penalties, Y, confidences_score)
-    dataset = tf.data.Dataset.from_tensor_slices((X, Y, confidences))
+if TRAIN:
+    # Load confidence scores if the model type is confidences
+    if MODEL_TYPE == 'confidences':
+        path = "plots/test-pls-{}-validation/random/rows-and-columns-prop/random_feasibility.csv".format(DIM)
+        confidences_score = np.genfromtxt('{}'.format(path), delimiter=',')
+        confidences_score = np.insert(confidences_score, 0, 1.0)
+        confidences = utility.from_penalties_to_confidences(X, penalties, Y, confidences_score)
+        train_dataset = tf.data.Dataset.from_tensor_slices((X, Y, confidences)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
+        print("Training set memory size: {}".format(sys.getsizeof(train_dataset)))
+        print("Confidences memory size: {}".format(sys.getsizeof(confidences)))
+    else:
+        #dataset = tf.data.Dataset.from_tensor_slices((X, Y, domains, multi_assign))
+        train_dataset = tf.data.Dataset.from_tensor_slices((X, Y, penalties)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
+
 
 model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, method=MODEL_TYPE, lmbd=args.lmbd)
 
@@ -322,9 +326,7 @@ except:
 ########################################################################################################################
 
 # Train model
-if TRAIN:
-    # Create batches
-    train_dataset = dataset.shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
+if TRAIN:    
     history = model.train(EPOCHS, train_dataset, "models/{}".format(model_name), DIM, validation_set, args.use_prop)
     #tf.saved_model.save(model, "models/{}".format(model_name))
     model.save_weights("models/{}".format(model_name), save_format='tf')

@@ -1048,7 +1048,7 @@ def from_penalties_to_confidences(partial_solutions, penalties, labels, confiden
     :return: a numpy array with confidences scores of shape (size, dim**3); as numpy array
     """
 
-    confidence_scores = np.zeros_like(penalties, dtype=np.float32)
+    confidence_scores = np.zeros_like(penalties, dtype=np.float16)
     count = 0
 
     for partial_sol, penalty, label in zip(partial_solutions, penalties, labels):
@@ -1255,7 +1255,7 @@ if __name__ == '__main__':
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label4)
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
+            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
             #ax1.plot(np.arange(len(my_data)), my_data, label=args.label4)
             plt.ylim(0, 1.1)
 
@@ -1303,7 +1303,7 @@ if __name__ == '__main__':
             assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label5)
-            ax2.plot(np.arange(len(my_data)), my_data, label=args.label8, linestyle='dashed')
+            #ax2.plot(np.arange(len(my_data)), my_data, label=args.label8, linestyle='dashed')
             plt.ylim(0, 1.1)
           
         if path9 is not None:
@@ -1314,7 +1314,7 @@ if __name__ == '__main__':
           assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
 
           #plt.plot(np.arange(len(my_data)), my_data, label=args.label6)
-          ax2.plot(np.arange(len(my_data)), my_data, label=args.label9, linestyle='dashdot')
+          #ax2.plot(np.arange(len(my_data)), my_data, label=args.label9, linestyle='dashdot')
           plt.ylim(0, 1.1)
 
         '''methods = np.asarray(methods)
@@ -1338,8 +1338,9 @@ if __name__ == '__main__':
         ax1.set_xlabel("# filled cells")
         ax2.set_xlabel("# filled cells")
         
-        ''' plt.xlabel("# of filled cells")
+        '''plt.xlabel("# of filled cells")
         plt.ylabel("Feasibility ratio")
-        plt.legend() '''
+        plt.legend()'''
+        
         plt.savefig(args.plot_title)
 
