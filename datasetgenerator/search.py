@@ -68,7 +68,7 @@ class SubPDecisionBuilder(pycp.PyDecisionBuilder):
             # those due to the fake optimization process
             fails = slv.Failures() - self.stats['base_fails'] - 1
             self.all_fails += fails
-            if fails >= 1000:
+            if fails >= self.failcap:
               self.over_cap += 1
             time = (slv.WallTime() - self.stats['base_time']) / 1000.0
             print('Attempt: %d | fails: %d, time: %.3f | all fails: %d | over cap: %d' % (k, fails, time, self.all_fails, self.over_cap))

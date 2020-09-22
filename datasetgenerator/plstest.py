@@ -28,7 +28,7 @@ import sys
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, '{}/../'.format(cwd))
 
-from models import FullyConnectedModel
+from models import MyModel
 
 from datasetgenerator import common, search
 
@@ -104,7 +104,7 @@ class DNNDecisionBuilder(pycp.PyDecisionBuilder):
                 val[x.Value()-1] = 1
             sol.extend(val)
         # Query the DNN to obtain var-value pair rankings
-        scores = self.dnn.predict(np.asarray(sol).reshape(1, self.order**3), penalties=np.zeros(shape=(1, self.order**3)), train=False)[0]
+        scores = self.dnn.predict(np.asarray(sol).reshape(1, self.order**3))[0]
         assert scores.shape == (self.order ** 3,), "Shape is {}".format(scores.shape)
         maxscore = None
         var, val = None, None
@@ -112,7 +112,7 @@ class DNNDecisionBuilder(pycp.PyDecisionBuilder):
 
             if not x.Bound():
 
-                vals = []
+                '''vals = []
                 probs = []
 
                 # Choose value to be assigned among the feasible ones according to net output probability
@@ -125,16 +125,16 @@ class DNNDecisionBuilder(pycp.PyDecisionBuilder):
                 probs /= probs.sum()
 
                 var = x
-                val = int(np.random.choice(vals, p=probs))
+                val = int(np.random.choice(vals, p=probs))'''
 
-                '''# The net chooses most confident domain value
+                # The net chooses most confident domain value
                 for v in x.DomainIterator():
                     score = scores[i * n + v - 1]
                     if maxscore is None or score > maxscore:
                         maxscore = score
                         var = x
                         val = v
-                        print(i, x)'''
+                        #print(i, x)
 
         ''' # With this approach the net chooses both the variable and the value to be assigned, according with its
         # probability distribution
@@ -359,16 +359,16 @@ if __name__ == '__main__':
     # Post the constraitns
     if add_rows_constraints or add_columns_constraints:
         for i in range(n):
-            """if add_rows_constraints:
+            if add_rows_constraints:
                 slv.Add(slv.AllDifferent([X[i,j] for j in range(n)]))
             if add_columns_constraints:
-                slv.Add(slv.AllDifferent([X[j,i] for j in range(n)]))"""
+                slv.Add(slv.AllDifferent([X[j,i] for j in range(n)]))
             for j in range(n):
                 for j2 in range(j+1, n):
-                    #slv.Add(X[i, j] != X[i, j2])
-                    #slv.Add(X[j, i] != X[j2, i])
-                    slv.Add( (X[i, j] == X[i, j2]) <= (X[i, j] != X[i, j2]) ) 
-                    slv.Add( (X[j, i] == X[j2, i]) <= (X[j, i] != X[j2, i]) ) 
+                    slv.Add(X[i, j] != X[i, j2])
+                    slv.Add(X[j, i] != X[j2, i])
+                    #slv.Add( (X[i, j] == X[i, j2]) <= (X[i, j] != X[i, j2]) ) 
+                    #slv.Add( (X[j, i] == X[j2, i]) <= (X[j, i] != X[j2, i]) ) 
 
 
     # Load a DNN, in case the "snail-dnn" search has been requested
@@ -376,7 +376,7 @@ if __name__ == '__main__':
         if args.dnn_fstem is None:
             raise ValueError('Missing file stem for the DNN')
 
-        model = FullyConnectedModel(num_layers=2, num_hidden=[512, 512], input_shape=(n**3,), output_dim=n**3)
+        model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=(n ** 3, ), output_dim=n ** 3, method='agnostic')
         model.load_weights(args.dnn_fstem)
         dnn = model
 
