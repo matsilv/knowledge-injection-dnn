@@ -334,8 +334,8 @@ except:
 # Train model
 if TRAIN:    
     history = model.train(EPOCHS, train_dataset, "models/{}".format(model_name), DIM, validation_set, args.use_prop)
-    #tf.saved_model.save(model, "models/{}".format(model_name))
-    model.save_weights("models/{}".format(model_name), save_format='tf')
+    tf.saved_model.save(model.model, "models/{}".format(model_name))
+    #model.save_weights("models/{}".format(model_name), save_format='tf')
 
     for name in history.keys():
         values = history[name]
@@ -354,14 +354,17 @@ if TRAIN:
     exit(0)
 
 else:
-    model.load_weights("models/{}".format(model_name))
+     # model.load_weights("models/{}".format(model_name))
+     model.model = tf.saved_model.load("models/{}".format(model_name))
 
 ########################################################################################################################
 
 # Test the model
 
 # Make predictions
-predict_val = model.predict(X).numpy()
+tensor_X = X.astype(np.float32)
+predict_val = model.predict_from_saved_model(tensor_X).numpy()
+
 if args.use_prop:
     predict_val *= (1 - penalties)
 

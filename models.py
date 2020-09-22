@@ -45,29 +45,15 @@ class MyModel(tf.keras.Model):
 
     def __define_model__(self, input_shape):
 
-        # List with all Tensorflow computation ops
-        self.layers_list = []
+        self.model = tf.keras.Sequential()
 
-        self.layers_list.append(tf.keras.layers.Dense(self.num_hidden[0], activation=tf.nn.relu, input_shape=input_shape))
+        self.model.add(tf.keras.layers.Dense(self.num_hidden[0], activation=tf.nn.relu, input_shape=input_shape))
         for i in range(1, self.num_layers):
-            self.layers_list.append(tf.keras.layers.Dense(self.num_hidden[i], activation=tf.nn.relu))
-        self.layers_list.append(tf.keras.layers.Dense(self.output_dim))
+            self.model.add(tf.keras.layers.Dense(self.num_hidden[i], activation=tf.nn.relu))
+        self.model.add(tf.keras.layers.Dense(self.output_dim))
 
     def __define_optimizer__(self):
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-
-    def call(self, x, *args):
-        """
-        Implement call method of tf.keras.Model
-        :param x: input tensor as tf.Tensor
-        :return: output tensor of tf.Tensor
-        """
-        x = tf.cast(x, dtype=tf.float32)
-
-        for l in self.layers_list:
-            x = l(x)
-
-        return x
 
     @tf.function
     def grad(self, inputs, targets, penalties):
@@ -102,7 +88,7 @@ class MyModel(tf.keras.Model):
         tensor_y = tf.cast(tensor_y, dtype=tf.float32)
         tensor_X = tf.cast(tensor_X, dtype=tf.float32)
 
-        y_pred = self.call(tensor_X)
+        y_pred = self.model(tensor_X)
 
         # supervised loss function
         cross_entropy_loss = tf.reduce_mean(tf.keras.losses.categorical_crossentropy(tensor_y, y_pred, from_logits=True))
@@ -125,14 +111,27 @@ class MyModel(tf.keras.Model):
         return loss, cross_entropy_loss, sbr_inspired_loss
 
     @tf.function
-    def predict(self, x):
+    def predict_from_saved_model(self, X):
         """
-        Predict from input tensors.
-        :param x: input as tf.Tensor
-        :return: output as tf.Tensor
+        Make predictions given input instances from tf 2 SavedModel.
+        :param X: input instances as numpy array with shape=input_shape
+        :return: numpy array of shape=(?, num_classes)
         """
 
-        return tf.nn.softmax(self.call(x))
+        X_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+
+        # Keras signatures is serving default
+        infer = self.model.signatures["serving_default"]
+        # make inference
+        pred_tensor = infer(X_tensor)
+
+        # inference output is a dictionary; last layer is the output one
+        pred_tensor = pred_tensor["dense_{}".format(self.num_layers)]
+
+        # output layer returns logits
+        pred_tensor = tf.nn.softmax(tf.cast(pred_tensor, dtype=tf.float32))
+
+        return pred_tensor
 
     def train(self, num_epochs, train_ds, ckpt_dir, dim, val_set, use_prop):
         """
@@ -176,7 +175,7 @@ class MyModel(tf.keras.Model):
             # Training loop - using batches
             for x, y, p in train_ds:
 
-                idx = 20
+                ''' idx = 20
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
@@ -190,7 +189,7 @@ class MyModel(tf.keras.Model):
                     for j in range(10):
                         print(p_numpy[i,j])
                     print()
-                exit(0)
+                exit(0) '''
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 
@@ -199,7 +198,7 @@ class MyModel(tf.keras.Model):
                 epoch_cross_entropy_loss_avg(cross_entropy_loss)
                 epoch_sbr_inspired_loss_avg(sbr_inspired_loss)
                 # Compare predicted label to actual label
-                epoch_accuracy(y, self.predict(x).numpy())
+                epoch_accuracy(y, self.model(x).numpy())
 
             # End epoch
             loss_history.append(epoch_loss_avg.result().numpy())
@@ -222,10 +221,10 @@ class MyModel(tf.keras.Model):
                             print(p_val[i,j])
                         print()'''
 
-                    preds = self.predict(x_val)
+                    preds = self.model(x_val)
 
                     if use_prop:
-                       pred = preds * (1 - p_val)
+                       preds = preds * (1 - p_val)
 
                     feas = compute_feasibility_from_predictions(x_val, preds, dim)
                     print("Current feasibility: {} | Best feasibility: {}".format(feas, best_feas))
@@ -239,6 +238,7 @@ class MyModel(tf.keras.Model):
                         count_not_improved = 0
                         # Save checkpoint
                         save_path = manager.save()
+                        tf.saved_model.save(self.model, ckpt_dir)
                         print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
 
                     if count_not_improved == 5:
