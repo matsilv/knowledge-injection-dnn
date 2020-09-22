@@ -85,12 +85,11 @@ def read_pls(s, frm):
 
 
 class DNNDecisionBuilder(pycp.PyDecisionBuilder):
-    def __init__(self, X, dnn, order):
+    def __init__(self, X, dnn):
         pycp.PyDecisionBuilder.__init__(self)
         self.X = X
         self.dnn = dnn
         self.n = int(round(math.sqrt(len(X))))
-        self.order = order
 
     def Next(self, slv):
         # If all variables are bound, the search is over
@@ -104,56 +103,29 @@ class DNNDecisionBuilder(pycp.PyDecisionBuilder):
                 val[x.Value()-1] = 1
             sol.extend(val)
         # Query the DNN to obtain var-value pair rankings
-        scores = self.dnn.predict(np.asarray(sol).reshape(1, self.order**3))[0]
-        assert scores.shape == (self.order ** 3,), "Shape is {}".format(scores.shape)
+        tensor_sol = np.asarray(sol, dtype=np.float32).reshape(1, n ** 3)
+        scores = self.dnn.predict_from_saved_model(tensor_sol).numpy()[0]
+        assert scores.shape == (n ** 3,), "Shape is {}".format(scores.shape)
         maxscore = None
         var, val = None, None
         for i, x in enumerate(self.X):
-
             if not x.Bound():
-
-                '''vals = []
-                probs = []
-
-                # Choose value to be assigned among the feasible ones according to net output probability
-                for v in x.DomainIterator():
-                    vals.append(v)
-                    probs.append(scores[i * n + v - 1])
-
-                # Normalize probabilities
-                probs = np.asarray(probs)
-                probs /= probs.sum()
-
-                var = x
-                val = int(np.random.choice(vals, p=probs))'''
-
-                # The net chooses most confident domain value
                 for v in x.DomainIterator():
                     score = scores[i * n + v - 1]
                     if maxscore is None or score > maxscore:
                         maxscore = score
                         var = x
                         val = v
-                        #print(i, x)
-
-        ''' # With this approach the net chooses both the variable and the value to be assigned, according with its
-        # probability distribution
-        label = np.random.choice(a=np.arange(1000), p=scores)
-        var = int(label // 10)
-        var = self.X[var]
-        val = int(label % 10)'''
-
         # Open a choice point
         return slv.AssignVariableValue(var, val)
 
 
 class MSDNNDecisionBuilder(pycp.PyDecisionBuilder):
-    def __init__(self, X, dnn, order):
+    def __init__(self, X, dnn):
         pycp.PyDecisionBuilder.__init__(self)
         self.X = X
         self.dnn = dnn
         self.n = int(round(math.sqrt(len(X))))
-        self.order = order
 
     def Next(self, slv):
         # If all variables are bound, the search is over
@@ -168,8 +140,8 @@ class MSDNNDecisionBuilder(pycp.PyDecisionBuilder):
             sol.extend(val)
 
         # Query the DNN to obtain var-value pair rankings
-        scores = self.dnn.predict(np.asarray(sol).reshape(1, self.order**3), penalties=np.zeros(shape=(1, self.order**3)), train=False)[0]
-        assert scores.shape == (self.order ** 3,), "Shape is {}".format(scores.shape)
+        scores = self.dnn.predict_from_saved_model(np.asarray(sol).reshape(1, 1000), apply_softmax=True)[0]
+        assert scores.shape == (1000,), "Shape is {}".format(scores.shape)
 
         # Choose a variable with the minimum size domain
         best, var, varidx = None, None, None
@@ -184,7 +156,7 @@ class MSDNNDecisionBuilder(pycp.PyDecisionBuilder):
 
         # Choose value to be assigned among the feasible ones according to net output probability
         for v in x.DomainIterator():
-            vals.append(v)
+            '''vals.append(v)
             probs.append(scores[varidx * n + v - 1])
 
         # Normalize probabilities
@@ -192,15 +164,15 @@ class MSDNNDecisionBuilder(pycp.PyDecisionBuilder):
         probs /= probs.sum()
 
         var = x
-        val = int(np.random.choice(vals, p=probs))
+        val = int(np.random.choice(vals, p=probs))'''
 
-        ''' #Choose the best value predicted by the network
+        # Choose the best value predicted by the network
         best, val = None, None
         for v in var.DomainIterator():
             score = scores[varidx * n + v - 1]
             if best is None or score > best:
                 best = score
-                val = v'''
+                val = v
         # Open a choice point
         return slv.AssignVariableValue(var, val)
 
@@ -363,12 +335,12 @@ if __name__ == '__main__':
                 slv.Add(slv.AllDifferent([X[i,j] for j in range(n)]))
             if add_columns_constraints:
                 slv.Add(slv.AllDifferent([X[j,i] for j in range(n)]))
-            for j in range(n):
+            '''for j in range(n):
                 for j2 in range(j+1, n):
-                    slv.Add(X[i, j] != X[i, j2])
-                    slv.Add(X[j, i] != X[j2, i])
-                    #slv.Add( (X[i, j] == X[i, j2]) <= (X[i, j] != X[i, j2]) ) 
-                    #slv.Add( (X[j, i] == X[j2, i]) <= (X[j, i] != X[j2, i]) ) 
+                    #slv.Add(X[i, j] != X[i, j2])
+                    #slv.Add(X[j, i] != X[j2, i])
+                    slv.Add( (X[i, j] == X[i, j2]) <= (X[i, j] != X[i, j2]) ) 
+                    slv.Add( (X[j, i] == X[j2, i]) <= (X[j, i] != X[j2, i]) )'''
 
 
     # Load a DNN, in case the "snail-dnn" search has been requested
@@ -376,8 +348,9 @@ if __name__ == '__main__':
         if args.dnn_fstem is None:
             raise ValueError('Missing file stem for the DNN')
 
-        model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=(n ** 3, ), output_dim=n ** 3, method='agnostic')
-        model.load_weights(args.dnn_fstem)
+        model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=(n ** 3,), output_dim=n ** 3, method='agnostic')
+        # model.load_weights(args.dnn_fstem)
+        model.model = tf.saved_model.load(args.dnn_fstem)
         dnn = model
 
     # Prepare a data structure to store global information abut search
@@ -410,9 +383,9 @@ if __name__ == '__main__':
     elif args.search_strategy == 'snail-ms':
         db = search.SnailMinSizeDecisionBuilder(flatX)
     elif args.search_strategy == 'snail-dnn':
-        db = DNNDecisionBuilder(flatX, dnn, n)
+        db = DNNDecisionBuilder(flatX, dnn)
     elif args.search_strategy == 'snail-msdnn':
-        db = MSDNNDecisionBuilder(flatX, dnn, n)
+        db = MSDNNDecisionBuilder(flatX, dnn)
     # Build a custom decision builder to store a solution and trigger a fail
     frmO = PLSFormatter(n, args.output_format)
     storedb = search.StoreDecisionBuilder(X, frmO, stats,
@@ -423,7 +396,7 @@ if __name__ == '__main__':
     frmI = None
     if args.print_inst:
         frmI = PLSFormatter(n, 'csv')
-    subpdb = search.SubPDecisionBuilder(X, K, bmark, stats, frmI, args.failcap)
+    subpdb = search.SubPDecisionBuilder(X, K, bmark, stats, frmI)
     # Build the overall search strategy
     inner_monitors = []
     if args.timeout > 0:
