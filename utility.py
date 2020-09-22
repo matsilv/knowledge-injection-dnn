@@ -1255,7 +1255,7 @@ if __name__ == '__main__':
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label4)
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
+            ax1.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
             #ax1.plot(np.arange(len(my_data)), my_data, label=args.label4)
             plt.ylim(0, 1.1)
 
@@ -1303,7 +1303,7 @@ if __name__ == '__main__':
             assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
 
             #plt.plot(np.arange(len(my_data)), my_data, label=args.label5)
-            #ax2.plot(np.arange(len(my_data)), my_data, label=args.label8, linestyle='dashed')
+            ax2.plot(np.arange(len(my_data)), my_data, label=args.label8, linestyle='dashed')
             plt.ylim(0, 1.1)
           
         if path9 is not None:

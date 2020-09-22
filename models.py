@@ -131,7 +131,6 @@ class MyModel(tf.keras.Model):
         :param x: input as tf.Tensor
         :return: output as tf.Tensor
         """
-        x = tf.cast(x, dtype=tf.float32)
 
         return tf.nn.softmax(self.call(x))
 
@@ -177,7 +176,7 @@ class MyModel(tf.keras.Model):
             # Training loop - using batches
             for x, y, p in train_ds:
 
-                ''' idx = 50
+                idx = 20
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
@@ -191,7 +190,7 @@ class MyModel(tf.keras.Model):
                     for j in range(10):
                         print(p_numpy[i,j])
                     print()
-                exit(0) '''
+                exit(0)
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 

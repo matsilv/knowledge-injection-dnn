@@ -297,7 +297,13 @@ if MODEL_TYPE not in ['agnostic', 'sbrinspiredloss', 'confidences']:
 if TRAIN:
     # Load confidence scores if the model type is confidences
     if MODEL_TYPE == 'confidences':
-        path = "plots/test-pls-{}-validation/random/rows-and-columns-prop/random_feasibility.csv".format(DIM)
+        if args.leave_columns_domains:
+            path = "plots/test-pls-{}-validation/random/rows-prop/random_feasibility.csv".format(DIM)
+        else:
+            path = "plots/test-pls-{}-validation/random/rows-and-columns-prop/random_feasibility.csv".format(DIM)
+
+        print("Loading confidences score from {}".format(path))
+        
         confidences_score = np.genfromtxt('{}'.format(path), delimiter=',')
         confidences_score = np.insert(confidences_score, 0, 1.0)
         confidences = utility.from_penalties_to_confidences(X, penalties, Y, confidences_score)
