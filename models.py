@@ -5,6 +5,7 @@
 """
 
 import tensorflow as tf
+import numpy as np
 
 from utility import compute_feasibility_from_predictions, visualize
 
@@ -56,17 +57,19 @@ class MyModel(tf.keras.Model):
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
     @tf.function
-    def grad(self, inputs, targets, penalties):
+    def grad(self, inputs, targets, penalties, weights):
         """
         Compute loss and gradients.
         :param inputs: input instances
         :param targets: target instances
+        :param penalties: penalties instances
+        :param weights: weights to solve balancing issues
         :return: loss values and gradients
         """
 
         with tf.GradientTape() as tape:
             loss_value, cross_entropy_loss, sbr_inspired_loss = \
-                self.compute_loss(inputs, targets, penalties)
+                self.compute_loss(inputs, targets, penalties, weights)
 
         grads = tape.gradient(loss_value, self.trainable_variables)
 
@@ -74,12 +77,13 @@ class MyModel(tf.keras.Model):
 
         return loss_value, cross_entropy_loss, sbr_inspired_loss
 
-    def compute_loss(self, tensor_X, tensor_y, tensor_p):
+    def compute_loss(self, tensor_X, tensor_y, tensor_p, tensor_w):
         """
         Compute SBR loss function.
         :param tensor_X: input instances as tf.Tensor with shape=(batch_size, n**3)
         :param tensor_y: instances' labels as tf.Tensor of shape=(batch_size, n**3)
         :param tensor_p: penalties as tf.Tensor of shape=(batch_size, n**3)
+        :param tensor_w: weights as tf.Tensor of shape=(batch_size, n**3)
         :return: loss value
         """
 
@@ -87,6 +91,7 @@ class MyModel(tf.keras.Model):
         tensor_p = tf.cast(tensor_p, dtype=tf.float32)
         tensor_y = tf.cast(tensor_y, dtype=tf.float32)
         tensor_X = tf.cast(tensor_X, dtype=tf.float32)
+        tensor_w = tf.cast(tensor_w, dtype=tf.float32)
 
         y_pred = self.model(tensor_X)
 
@@ -97,8 +102,10 @@ class MyModel(tf.keras.Model):
         sbr_inspired_loss = tf.reduce_mean(tf.reduce_sum(tf.square((1 - tensor_p) - tf.nn.sigmoid(y_pred)), axis=1))
 
         # binary cross-entropy
-        binary_cross_entropy = tf.reduce_mean(
-            tf.keras.losses.binary_crossentropy(tensor_p, y_pred, from_logits=True))
+        binary_cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(tensor_p, y_pred) * tensor_w)
+
+        ''' binary_cross_entropy = tf.reduce_mean(
+            tf.keras.losses.binary_crossentropy(tensor_p, y_pred, from_logits=True)) '''
 
         if self.method == 'sbrinspiredloss':
             print(self.lmbd)
@@ -173,14 +180,16 @@ class MyModel(tf.keras.Model):
             epoch_accuracy = tf.keras.metrics.CategoricalAccuracy()
 
             # Training loop - using batches
-            for x, y, p in train_ds:
+            for x, y, p, w in train_ds:
 
                 ''' idx = 20
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
                 p_numpy = p.numpy()
+                w_numpy = w.numpy()
                 p_numpy = p_numpy[idx].reshape(10, 10, 10)
+                w_numpy = w_numpy[idx].reshape(10, 10, 10)
                 visualize(x_numpy[idx].reshape(10, 10, 10))
                 print()
                 visualize(y_numpy[idx].reshape(10, 10, 10))
@@ -189,9 +198,15 @@ class MyModel(tf.keras.Model):
                     for j in range(10):
                         print(p_numpy[i,j])
                     print()
+
+                print()
+                for i in range(10):
+                    for j in range(10):
+                        print(w_numpy[i, j])
+                    print()
                 exit(0) '''
 
-                loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
+                loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p, w)
 
                 # Track progress
                 epoch_loss_avg(loss_value)  # Add current batch loss

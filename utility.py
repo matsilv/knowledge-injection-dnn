@@ -1045,20 +1045,27 @@ def from_penalties_to_confidences(partial_solutions, penalties, labels, confiden
                     assignment; as numpy array
     :param confidences: an array of shape dim**2 where each element represents the feasibility ratio of partial
                         solutions with a number of assigned variables corresponding to the position in the array.
-    :return: a numpy array with confidences scores of shape (size, dim**3); as numpy array
+    :return: two numpy arrays, one with confidences scores of shape (size, dim**3) and another one with
+                    weights of shape (size, dim**3)
     """
 
     confidence_scores = np.zeros_like(penalties, dtype=np.float16)
+    weights = np.zeros_like(confidence_scores, dtype=np.float16)
     count = 0
 
     for partial_sol, penalty, label in zip(partial_solutions, penalties, labels):
         num_assigned_vars = np.sum(partial_sol)
         assert (0 <= num_assigned_vars <= 99), "Unexpected error: the number of assigned variables must be in the " \
                                                "range [0, 99]"
+
+        m = np.sum(1 - penalty)
+        n = 1
         confidence_scores[count] = (1 - penalty) * confidences[num_assigned_vars]
+        weights[count] = (n + m) / m
 
         feas_assign = np.argmax(label)
         confidence_scores[count, feas_assign] = 1
+        weights[count, feas_assign] = (n + m) / n
 
         '''print('-------------------- Partial solution -------------------------')
         visualize(partial_sol.reshape(10, 10, 10))
@@ -1071,11 +1078,16 @@ def from_penalties_to_confidences(partial_solutions, penalties, labels, confiden
             for j in range(10):
                 print(confidence_scores[count].reshape(10, 10, 10)[i, j])
             print()
+        print('------------------------ Weights -----------------------------------')
+        for i in range(10):
+            for j in range(10):
+                print(weights[count].reshape(10, 10, 10)[i, j])
+            print()
         print('------------------------------------------------------------------')'''
 
         count += 1
 
-    return confidence_scores
+    return confidence_scores, weights
 
 ########################################################################################################################
 if __name__ == '__main__':

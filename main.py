@@ -306,13 +306,15 @@ if TRAIN:
         
         confidences_score = np.genfromtxt('{}'.format(path), delimiter=',')
         confidences_score = np.insert(confidences_score, 0, 1.0)
-        confidences = utility.from_penalties_to_confidences(X, penalties, Y, confidences_score)
-        train_dataset = tf.data.Dataset.from_tensor_slices((X, Y, confidences)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
+        confidences, weights = utility.from_penalties_to_confidences(X, penalties, Y, confidences_score)
+        train_dataset = \
+            tf.data.Dataset.from_tensor_slices((X, Y, confidences, weights)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
         print("Training set memory size: {}".format(sys.getsizeof(train_dataset)))
         print("Confidences memory size: {}".format(sys.getsizeof(confidences)))
     else:
+        weights = np.ones_like(penalties, dtype=np.float16)
         #dataset = tf.data.Dataset.from_tensor_slices((X, Y, domains, multi_assign))
-        train_dataset = tf.data.Dataset.from_tensor_slices((X, Y, penalties)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
+        train_dataset = tf.data.Dataset.from_tensor_slices((X, Y, penalties, weights)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
 
 
 model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, method=MODEL_TYPE, lmbd=args.lmbd)
@@ -334,8 +336,6 @@ except:
 # Train model
 if TRAIN:    
     history = model.train(EPOCHS, train_dataset, "models/{}".format(model_name), DIM, validation_set, args.use_prop)
-    tf.saved_model.save(model.model, "models/{}".format(model_name))
-    #model.save_weights("models/{}".format(model_name), save_format='tf')
 
     for name in history.keys():
         values = history[name]
