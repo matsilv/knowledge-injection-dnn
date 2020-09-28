@@ -304,13 +304,11 @@ if TRAIN:
 
         print("Loading confidences score from {}".format(path))
         
-        confidences_score = np.genfromtxt('{}'.format(path), delimiter=',')
-        confidences_score = np.insert(confidences_score, 0, 1.0)
-        confidences, weights = utility.from_penalties_to_confidences(X, penalties, Y, confidences_score)
+        confidences = np.genfromtxt('{}'.format(path), delimiter=',')
+        confidences = np.insert(confidences, 0, 1.0)
+        penalties, weights = utility.from_penalties_to_confidences(X, penalties, Y, confidences)
         train_dataset = \
-            tf.data.Dataset.from_tensor_slices((X, Y, confidences, weights)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
-        print("Training set memory size: {}".format(sys.getsizeof(train_dataset)))
-        print("Confidences memory size: {}".format(sys.getsizeof(confidences)))
+            tf.data.Dataset.from_tensor_slices((X, Y, penalties, weights)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
     else:
         weights = np.ones_like(penalties, dtype=np.float16)
         #dataset = tf.data.Dataset.from_tensor_slices((X, Y, domains, multi_assign))
@@ -318,6 +316,11 @@ if TRAIN:
 
 
 model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, method=MODEL_TYPE, lmbd=args.lmbd)
+print("Partial solutions memory size: {}".format(sys.getsizeof(X)))
+print("Labels memory size: {}".format(sys.getsizeof(Y)))
+print("Penalties memory size: {}".format(sys.getsizeof(penalties)))
+print("Training set memory size: {}".format(sys.getsizeof(train_dataset)))
+print("Model memory size: {}".format(model))
 
 # Model name for both training and test
 if not SPECIALIZED:

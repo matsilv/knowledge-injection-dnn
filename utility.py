@@ -1050,7 +1050,7 @@ def from_penalties_to_confidences(partial_solutions, penalties, labels, confiden
     """
 
     confidence_scores = np.zeros_like(penalties, dtype=np.float16)
-    weights = np.zeros_like(confidence_scores, dtype=np.float16)
+    weights = np.ones_like(confidence_scores, dtype=np.float16)
     count = 0
 
     for partial_sol, penalty, label in zip(partial_solutions, penalties, labels):
@@ -1058,10 +1058,14 @@ def from_penalties_to_confidences(partial_solutions, penalties, labels, confiden
         assert (0 <= num_assigned_vars <= 99), "Unexpected error: the number of assigned variables must be in the " \
                                                "range [0, 99]"
 
-        m = np.sum(1 - penalty)
+        m = np.sum(1 - penalty) - 1
+        if m == 0:
+            m = 1
         n = 1
         confidence_scores[count] = (1 - penalty) * confidences[num_assigned_vars]
         weights[count] = (n + m) / m
+        indexes = np.argwhere(penalty == 1)
+        weights[count, indexes] = 1
 
         feas_assign = np.argmax(label)
         confidence_scores[count, feas_assign] = 1

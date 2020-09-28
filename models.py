@@ -56,7 +56,7 @@ class MyModel(tf.keras.Model):
     def __define_optimizer__(self):
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-    @tf.function
+    #@tf.function
     def grad(self, inputs, targets, penalties, weights):
         """
         Compute loss and gradients.
@@ -101,10 +101,52 @@ class MyModel(tf.keras.Model):
         # SBR inspired loss
         sbr_inspired_loss = tf.reduce_mean(tf.reduce_sum(tf.square((1 - tensor_p) - tf.nn.sigmoid(y_pred)), axis=1))
 
+        idx = 0
+        p_numpy = tensor_p.numpy()
+        y_numpy = tensor_y.numpy()
+        x_numpy = tensor_X.numpy()
+        w_numpy = tensor_w.numpy()
+
+        p_numpy = p_numpy[idx].reshape(10, 10, 10)
+        w_numpy = w_numpy[idx].reshape(10, 10, 10)
+        print('--------------------- Partial solution ----------------------')
+        visualize(x_numpy[idx].reshape(10, 10, 10))
+        print()
+        print('--------------------- Assignment ---------------------')
+        visualize(y_numpy[idx].reshape(10, 10, 10))
+        print()
+        print('--------------------- Penalties ------------------------')
+        for i in range(10):
+            for j in range(10):
+                print(p_numpy[i, j])
+            print()
+
+        print()
+        print('--------------------- Weights ---------------------------')
+        for i in range(10):
+            for j in range(10):
+                print(w_numpy[i, j])
+            print()
+
+        bce = tf.nn.sigmoid_cross_entropy_with_logits(tensor_p, y_pred) * tensor_w
+        bce_numpy = bce.numpy()
+        bce_numpy = bce_numpy[idx].reshape(10, 10, 10)
+        print()
+        print('------------------- Binary cross-entropy ---------------------')
+        for i in range(10):
+            print(bce_numpy[i])
+            print()
+
+        label = np.argmax(y_numpy)
+        label = np.unravel_index(label, (10, 10, 10))
+        print(label)
+        print(bce_numpy[label])
+        exit()
+
         # binary cross-entropy
         binary_cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(tensor_p, y_pred) * tensor_w)
 
-        ''' binary_cross_entropy = tf.reduce_mean(
+        ''''binary_cross_entropy = tf.reduce_mean(
             tf.keras.losses.binary_crossentropy(tensor_p, y_pred, from_logits=True)) '''
 
         if self.method == 'sbrinspiredloss':
@@ -182,7 +224,7 @@ class MyModel(tf.keras.Model):
             # Training loop - using batches
             for x, y, p, w in train_ds:
 
-                ''' idx = 20
+                '''idx = 20
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
@@ -204,7 +246,7 @@ class MyModel(tf.keras.Model):
                     for j in range(10):
                         print(w_numpy[i, j])
                     print()
-                exit(0) '''
+                exit(0)'''
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p, w)
 
