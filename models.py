@@ -56,8 +56,8 @@ class MyModel(tf.keras.Model):
     def __define_optimizer__(self):
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-    #@tf.function
-    def grad(self, inputs, targets, penalties, weights):
+    @tf.function
+    def grad(self, inputs, targets, penalties):
         """
         Compute loss and gradients.
         :param inputs: input instances
@@ -69,7 +69,7 @@ class MyModel(tf.keras.Model):
 
         with tf.GradientTape() as tape:
             loss_value, cross_entropy_loss, sbr_inspired_loss = \
-                self.compute_loss(inputs, targets, penalties, weights)
+                self.compute_loss(inputs, targets, penalties)
 
         grads = tape.gradient(loss_value, self.trainable_variables)
 
@@ -77,7 +77,7 @@ class MyModel(tf.keras.Model):
 
         return loss_value, cross_entropy_loss, sbr_inspired_loss
 
-    def compute_loss(self, tensor_X, tensor_y, tensor_p, tensor_w):
+    def compute_loss(self, tensor_X, tensor_y, tensor_p):
         """
         Compute SBR loss function.
         :param tensor_X: input instances as tf.Tensor with shape=(batch_size, n**3)
@@ -91,7 +91,6 @@ class MyModel(tf.keras.Model):
         tensor_p = tf.cast(tensor_p, dtype=tf.float32)
         tensor_y = tf.cast(tensor_y, dtype=tf.float32)
         tensor_X = tf.cast(tensor_X, dtype=tf.float32)
-        tensor_w = tf.cast(tensor_w, dtype=tf.float32)
 
         y_pred = self.model(tensor_X)
 
@@ -101,7 +100,7 @@ class MyModel(tf.keras.Model):
         # SBR inspired loss
         sbr_inspired_loss = tf.reduce_mean(tf.reduce_sum(tf.square((1 - tensor_p) - tf.nn.sigmoid(y_pred)), axis=1))
 
-        idx = 0
+        '''idx = 0
         p_numpy = tensor_p.numpy()
         y_numpy = tensor_y.numpy()
         x_numpy = tensor_X.numpy()
@@ -141,10 +140,7 @@ class MyModel(tf.keras.Model):
         label = np.unravel_index(label, (10, 10, 10))
         print(label)
         print(bce_numpy[label])
-        exit()
-
-        # binary cross-entropy
-        binary_cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(tensor_p, y_pred) * tensor_w)
+        exit()'''
 
         ''''binary_cross_entropy = tf.reduce_mean(
             tf.keras.losses.binary_crossentropy(tensor_p, y_pred, from_logits=True)) '''
@@ -154,16 +150,15 @@ class MyModel(tf.keras.Model):
             loss = cross_entropy_loss + sbr_inspired_loss * self.lmbd
         elif self.method == 'agnostic':
             loss = cross_entropy_loss
-        else:
-            loss = binary_cross_entropy
 
         return loss, cross_entropy_loss, sbr_inspired_loss
 
     @tf.function
-    def predict_from_saved_model(self, X):
+    def predict_from_saved_model(self, X, logits=False):
         """
         Make predictions given input instances from tf 2 SavedModel.
         :param X: input instances as numpy array with shape=input_shape
+        :param logits: True if the method should return logits instead of a probability distribution; as boolean
         :return: numpy array of shape=(?, num_classes)
         """
 
@@ -178,11 +173,12 @@ class MyModel(tf.keras.Model):
         pred_tensor = pred_tensor["dense_{}".format(self.num_layers)]
 
         # output layer returns logits
-        pred_tensor = tf.nn.softmax(tf.cast(pred_tensor, dtype=tf.float32))
+        if not logits:
+            pred_tensor = tf.nn.softmax(tf.cast(pred_tensor, dtype=tf.float32))
 
         return pred_tensor
 
-    def train(self, num_epochs, train_ds, ckpt_dir, dim, val_set, use_prop):
+    def train(self, num_epochs, train_ds, ckpt_dir, dim, val_set, use_prop, patience):
         """
         Train the model.
         :param num_epochs: number of training epochs
@@ -191,6 +187,7 @@ class MyModel(tf.keras.Model):
         :param dim: PLS dimension; as integer
         :param val_set: validation dataset; as tuple of 2 numpy array representing inputs and penalties
         :param use_prop: use propagation during validation
+        :param patience: stop training if after a specified number of epochs feasibility does not improve
         :return: losses as dictionary of lists
         """
 
@@ -222,33 +219,29 @@ class MyModel(tf.keras.Model):
             epoch_accuracy = tf.keras.metrics.CategoricalAccuracy()
 
             # Training loop - using batches
-            for x, y, p, w in train_ds:
+            for x, y, p in train_ds:
 
-                '''idx = 20
+                y = tf.one_hot(y, depth=dim**3, dtype=tf.int8)
+                y = tf.reshape(y, [y.shape[0], -1])
+
+                '''idx = 0
+                dim = 12
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
                 p_numpy = p.numpy()
-                w_numpy = w.numpy()
-                p_numpy = p_numpy[idx].reshape(10, 10, 10)
-                w_numpy = w_numpy[idx].reshape(10, 10, 10)
-                visualize(x_numpy[idx].reshape(10, 10, 10))
+                p_numpy = p_numpy[idx].reshape(dim, dim, dim)
+                visualize(x_numpy[idx].reshape(dim, dim, dim))
                 print()
-                visualize(y_numpy[idx].reshape(10, 10, 10))
+                visualize(y_numpy[idx].reshape(dim, dim, dim))
                 print()
                 for i in range(10):
                     for j in range(10):
                         print(p_numpy[i,j])
                     print()
+                exit()'''
 
-                print()
-                for i in range(10):
-                    for j in range(10):
-                        print(w_numpy[i, j])
-                    print()
-                exit(0)'''
-
-                loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p, w)
+                loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 
                 # Track progress
                 epoch_loss_avg(loss_value)  # Add current batch loss
@@ -298,7 +291,7 @@ class MyModel(tf.keras.Model):
                         tf.saved_model.save(self.model, ckpt_dir)
                         print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
 
-                    if count_not_improved == 5:
+                    if count_not_improved == patience:
                       break
 
             print(

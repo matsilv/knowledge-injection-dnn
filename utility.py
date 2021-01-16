@@ -8,7 +8,7 @@ import numpy as np
 import random
 import pandas
 import sys
-import re
+import tensorflow as tf
 from ortools.sat.python import cp_model
 from datasetgenerator.dataprocessing import state_to_string
 import csv
@@ -283,7 +283,8 @@ def visualize(square):
 
 
 def load_dataset(filename, problem, max_size=10000, mode="onehot", save_domains=False,
-                 domains_filename=None, save_partial_solutions=False, partial_sols_filename=None):
+                 domains_filename=None, save_partial_solutions=False, partial_sols_filename=None,
+                 assignments_filename=None):
     """
     Load solutions from a txt file in the PLS instance.
     :param filename: name of the file; as string
@@ -311,6 +312,8 @@ def load_dataset(filename, problem, max_size=10000, mode="onehot", save_domains=
         if save_partial_solutions:
             partial_sols_file = open(partial_sols_filename, "w")
             csv_writer_sols = csv.writer(partial_sols_file, delimiter=',')
+            assignments_file = open(assignments_filename, "w") 
+            csv_writer_assignments = csv.writer(assignments_file, delimiter=',')
 
         dim = problem.n
 
@@ -366,7 +369,7 @@ def load_dataset(filename, problem, max_size=10000, mode="onehot", save_domains=
                         if save_domains:
                             #P.append(tmp_problem.domains)
                             csv_writer.writerow(tmp_problem.domains.reshape(-1))
-                        if save_partial_solutions and np.sum(assignment) == 40:
+                        if save_partial_solutions:
                             csv_writer_sols.writerow(assignment.reshape(-1))
                     else:
                         X.append(sol)
@@ -380,6 +383,8 @@ def load_dataset(filename, problem, max_size=10000, mode="onehot", save_domains=
                 else:
                     if mode == "onehot":
                         Y.append(assignment.copy())
+                        if save_partial_solutions:
+                            csv_writer_assignments.writerow([np.argmax(assignment.reshape(-1))])
                     else:
                         Y.append(sol)
 
@@ -416,6 +421,22 @@ def load_dataset(filename, problem, max_size=10000, mode="onehot", save_domains=
         return X, Y
 ########################################################################################################################
 
+
+def __pack_row__(*row):
+    return tf.stack(row, 1)
+
+########################################################################################################################
+
+
+def load_dataset_with_tf(filename, column_types, batch_size):
+    ds = tf.data.experimental.CsvDataset(filename, record_defaults=column_types, header=False)
+    ds = ds.shuffle(10000, seed=1)
+    ds = ds.batch(batch_size).map(__pack_row__)
+
+    return ds
+
+
+########################################################################################################################
 
 def visualize_dataset(X, Y, exit_end=True):
     """
@@ -748,6 +769,8 @@ def read_solutions_from_csv(filename, max_size=10000, constraint=None, size=0, n
     else:
         constraint_idxs = __square_rule__(size)
 
+    
+
     with open(filename, "r") as file:
         csv_reader = csv.reader(file)
         count = 0
@@ -757,6 +780,7 @@ def read_solutions_from_csv(filename, max_size=10000, constraint=None, size=0, n
                 break
             assigned = [i for i,x in enumerate(row) if x=='1']
             square[assigned] = 1
+            
             square = square.reshape((10, 10, 10))
             problem = PLSInstance()
             assert problem.set_square(square), "Solution must be feasible"
@@ -848,10 +872,12 @@ def read_domains_from_csv(filename, max_size=10000):
 ########################################################################################################################
 
 
-def read_solutions_from_csv(filename, dim):
+def read_solutions_from_csv(filename, dim, max_size=100000):
     """
     Method to read solutions from a csv file and check if it is feasible and which constraints are not satisfied
     :param filename: name of the file from which to read the solutions
+    :param dim: problem dimension; as integer
+    :param max_size: maximum number of solutions to be loaded
     :return:
     """
     with open(filename, "r") as file:
@@ -867,6 +893,8 @@ def read_solutions_from_csv(filename, dim):
         # count of examined solutions
         count_solutions = 0
 
+        freq_count = np.zeros(shape=(100, ))
+
 
         for line in csv_reader:
             if len(line) != dim ** 3:
@@ -874,11 +902,14 @@ def read_solutions_from_csv(filename, dim):
             assert len(line) == dim**3
             one_hot_sol = [int(c) for c in line]
             one_hot_sol = np.asarray(one_hot_sol)
+            num_assigned_vars = np.sum(one_hot_sol)
+            freq_count[num_assigned_vars] += 1
             reshaped_sol = np.reshape(one_hot_sol, (dim, dim, dim))
             #print("Number of assigned variables: {}".format(np.sum(one_hot_sol)))
             problem = PLSInstance()
             problem.set_square(reshaped_sol.copy())
             #problem.visualize()
+            #print()
             constraints_satisfied = problem.__check_constraints_type__()
             count_solutions += 1
             count_single_assign_violations += constraints_satisfied[0]
@@ -886,6 +917,9 @@ def read_solutions_from_csv(filename, dim):
             count_columns_violations += constraints_satisfied[2]
             if constraints_satisfied[0] == 0 and constraints_satisfied[1] == 0 and constraints_satisfied[2] == 0:
                 count_feasible_sols += 1
+
+            if count_solutions == max_size:
+                break
 
         print("Count of feasible solutions: {}".format(count_feasible_sols))
         print("Count of solutions: {}".format(count_solutions))
@@ -1093,270 +1127,70 @@ def from_penalties_to_confidences(partial_solutions, penalties, labels, confiden
 
     return confidence_scores, weights
 
+
 ########################################################################################################################
+
+
+def make_subplots(nested_path, n_subplots, labels, titles, pls_sizes=[7, 10, 12]):
+    sns.set_style('darkgrid')
+    linestyles = ['solid', 'dotted', 'dashed', 'dashdot', (0, (1, 10)), (0, (5, 10))]
+    assert len(nested_path) == n_subplots
+    plt.rcParams["figure.figsize"] = (20, 15)
+    fig, axis = plt.subplots(1, n_subplots, sharey=True)
+    fig.text(0.5, 0.04, '# of filled cells', ha='center', fontsize=16, fontweight='bold')
+    fig.text(0.07, 0.5, 'Feasibility ratio', va='center', rotation='vertical', fontsize=16, fontweight='bold')
+    subplots = [*axis]
+    for subp_idx, (paths, subp) in enumerate(zip(nested_path, subplots)):
+        ax = subplots[subp_idx]
+        ax.set_xlim(0, pls_sizes[subp_idx]**2)
+        ax.set_ylim(0, 1.1)
+        ticks = np.arange(0, pls_sizes[subp_idx]**2, pls_sizes[subp_idx]*2)
+        assert len(paths) <= len(linestyles), 'Max {} curves can be plotted in the same subplot'.format(len(linestyles))
+        ax.set_xticks(ticks)
+        ax.tick_params(labelsize=14)
+        for path_idx, path in enumerate(paths):
+            feasibilities = np.genfromtxt(path, delimiter=',')
+            ax.plot(np.arange(len(feasibilities)), feasibilities, linestyle=linestyles[path_idx])
+        if subp_idx == 0:
+            ax.legend(labels, fontsize=16)
+
+        ax.set_title(titles[subp_idx], fontweight='bold', fontsize='18')
+    plt.show()
+
+########################################################################################################################
+
+
 if __name__ == '__main__':
+    nested_path = [['plots/test-pls-7-tf-keras/model-agnostic/all-ts/run-1/feasibility_test.csv',
+      'plots/test-pls-7-tf-keras/sbr-inspired-loss/all-ts/rows/run-1/feasibility_test.csv',
+      'plots/test-pls-7-tf-keras/sbr-inspired-loss/all-ts/full/run-1/feasibility_test.csv',
+      'plots/test-pls-7-tf-keras/random/no-prop/random_feasibility.csv'],
 
-    '''compute_solutions_similarity("100_solutions/1000_generated/model_agnostic_no_cols_solutions.csv",
-                                 "100_solutions/1000_generated/rows_knowledge_no_cols_solutions.csv",
-                                 "100_solutions/pls10_10k.csv")'''
+                   ['plots/test-pls-10-tf-keras/model-agnostic/all-ts/run-3/feasibility_test.csv',
+                    'plots/test-pls-10-tf-keras/sbr-inspired-loss/all-ts/rows/run-3/feasibility_test.csv',
+                    'plots/test-pls-10-tf-keras/sbr-inspired-loss/all-ts/full/run-3/feasibility_test.csv',
+                    'plots/test-pls-10-tf-keras/random/no-prop/random_feasibility.csv'],
 
-    '''problem = PLSInstance(n=10, vals_dim=10)
-    X, Y = load_dataset("datasets/DS.PLS.A.UNIQUES.L.4.pls10_10k.txt", problem, max_size=100, mode="onehot", save_domains=False, type="train")
-    domains = read_domains_from_csv("domains_test.csv", max_size=100)
+                   ['plots/test-pls-12-tf-keras/model-agnostic/all-ts/run-1/feasibility_test.csv',
+                    'plots/test-pls-12-tf-keras/sbr-inspired-loss/all-ts/rows/run-1/feasibility_test.csv',
+                    'plots/test-pls-12-tf-keras/sbr-inspired-loss/all-ts/full/run-1/feasibility_test.csv',
+                    'plots/test-pls-12-tf-keras/random/no-prop/random_feasibility.csv']
+                   ]
 
-    for x, y, d in zip(X, Y, domains):
-        x = x.reshape(10, 10, 10)
-        y = y.reshape(10, 10, 10)
-        d = d.reshape(10, 10, 10)
+    nested_path = [
+        ['plots/test-pls-10-tf-keras/random/rows-prop/random_feasibility.csv',
+        'plots/test-pls-10-tf-keras/sbr-inspired-loss/all-ts/rows/run-3/feasibility_test.csv',
+        'plots/test-pls-10-tf-keras/sbr-inspired-loss/all-ts/rows/run-4/feasibility_test.csv',
+        'plots/test-pls-10-tf-keras/model-agnostic/all-ts/run-3/feasibility_test.csv'],
+        ['plots/test-pls-10-tf-keras/random/rows-and-columns-prop/random_feasibility.csv',
+         'plots/test-pls-10-tf-keras/sbr-inspired-loss/all-ts/full/run-3/feasibility_test.csv',
+         'plots/test-pls-10-tf-keras/sbr-inspired-loss/all-ts/full/run-5/feasibility_test.csv',
+         'plots/test-pls-10-tf-keras/model-agnostic/all-ts/run-3/feasibility_test.csv']
+    ]
 
-        visualize(x)
-        print()
-        visualize(y)
-        print()
-        for i in range(10):
-            for j in range(10):
-                print(d[i, j])
-            print()
-        print('---------------------------------------------------------------------')
-        print()'''
-    #create_empty_board_partial_solutions_file(save_to="datasets/empty_boards_partial_assignments.csv", max_size=5000)
-    #read_solutions_from_csv(filename="datasets/pls10/pls10_agnostic_on_10k_sols_no_cols_prop_solutions.csv", dim=10)
-    #exit(0)
-    #read_solutions_from_csv("pls10_checker_rule_size_10.csv", max_size=10000, constraint="checker", size=10, num=1)
-    #create_dataset_A("pls10_checker_rule_size_10", ratio=4)'''
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--size", type=int, default=0, help="Constraint indexes size")
-    parser.add_argument("--max-size", type=int, default=1000000, help="Max dataset size to load")
-    parser.add_argument("--mode", type=str, choices=["plot", "balance", "variance"], default="plot", help="Choose mode")
-    parser.add_argument('infile', nargs='?', default=None, help="File dataset to balance")
-    parser.add_argument("--path1", type=str, default=None)
-    parser.add_argument("--path2", type=str, default=None)
-    parser.add_argument("--path3", type=str, default=None)
-    parser.add_argument("--path4", type=str, default=None)
-    parser.add_argument("--path5", type=str, default=None)
-    parser.add_argument("--path6", type=str, default=None)
-    parser.add_argument("--path7", type=str, default=None)
-    parser.add_argument("--path8", type=str, default=None)
-    parser.add_argument("--path9", type=str, default=None)
+    labels = ['rnd-prop', 'lambda: 1', 'lambda: 0.01', 'agn']
+    titles = ['Rows', 'Full']
 
-    parser.add_argument("--constraint", type=str, default=None)
-    parser.add_argument("--plot-title", type=str, default=None)
-    parser.add_argument("--label1", type=str, default=None)
-    parser.add_argument("--label2", type=str, default=None)
-    parser.add_argument("--label3", type=str, default=None)
-    parser.add_argument("--label4", type=str, default=None)
-    parser.add_argument("--label5", type=str, default=None)
-    parser.add_argument("--label6", type=str, default=None)
-    parser.add_argument("--label7", type=str, default=None)
-    parser.add_argument("--label8", type=str, default=None)
-    parser.add_argument("--label9", type=str, default=None)
+    make_subplots(nested_path, n_subplots=2, labels=labels, titles=titles, pls_sizes=[10, 10])
 
-    args = parser.parse_args()
-
-    SIZE = int(args.size)
-    MODE = args.mode
-    FILE = args.infile
-    MAX_SIZE = int(args.max_size)
-    CONSTR = args.constraint
-
-    if MODE == "variance":
-
-        if SIZE == 0:
-            name = "10k"
-        else:
-            name = "checker_rule_size_{}".format(SIZE)
-
-        solutions = read_solutions_from_csv("datasets/solutions/pls10_{}.csv".format(name))
-        decimal_format_solutions = np.zeros(shape=(len(solutions), 100))
-        idx = 0
-        for sol in solutions:
-            sol = np.argmax(sol, axis=2)
-            sol = sol.reshape(-1)
-            decimal_format_solutions[idx] = sol
-            idx += 1
-        np.set_printoptions(formatter={'float': lambda x: "{0:2.2f}".format(x)})
-        print(compute_variance(decimal_format_solutions))
-
-    elif MODE == "balance":
-        # load training data
-        print(FILE)
-        # create problem instance
-        problem = PLSInstance(n=10)
-        init_prob = problem.copy()
-        X, Y = load_dataset("datasets/{}".format(FILE), problem, max_size=MAX_SIZE, mode="string")
-        visualize_dataset(X, Y)
-        balance_dataset(X, Y, FILE)
-        problem = PLSInstance(n=10)
-        init_prob = problem.copy()
-        pruned_X, pruned_Y = load_dataset("datasets/pruned_{}".format(FILE), init_prob, max_size=MAX_SIZE, mode="string")
-        visualize_dataset(pruned_X, pruned_Y)
-
-    else:
-
-        sns.set()
-        sns.set_style("darkgrid")
-        plt.rcParams["figure.figsize"] = (12, 5)
-
-        linestyle_tuple = [
-     ('loosely dotted',        (0, (1, 10))),
-     ('dotted',                (0, (1, 1))),
-     ('densely dotted',        (0, (1, 1))),
-
-     ('loosely dashed',        (0, (5, 10))),
-     ('dashed',                (0, (5, 5))),
-     ('densely dashed',        (0, (5, 1))),
-
-     ('loosely dashdotted',    (0, (3, 10, 1, 10))),
-     ('dashdotted',            (0, (3, 5, 1, 5))),
-     ('densely dashdotted',    (0, (3, 1, 1, 1))),
-
-     ('dashdotdotted',         (0, (3, 5, 1, 5, 1, 5))),
-     ('loosely dashdotdotted', (0, (3, 10, 1, 10, 1, 10))),
-     ('densely dashdotdotted', (0, (3, 1, 1, 1, 1, 1)))]
-
-        path1 = args.path1
-        path2 = args.path2
-        path3 = args.path3
-        path4 = args.path4
-        path5 = args.path5
-        path6 = args.path6
-        path7 = args.path7
-        path8 = args.path8
-        path9 = args.path9
-
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-
-        if path1 is not None:
-            my_data = np.genfromtxt('{}'.format(path1), delimiter=',')
-            methods = [args.label1 for _ in range(99)]
-            assigned_vars = np.arange(99)
-
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label1, linestyle='solid')
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label1)
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label1, linestyle='solid')
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label1)
-            plt.ylim(0, 1.1)
-
-        if path2 is not None:
-            my_data = np.genfromtxt('{}'.format(path2), delimiter=',')
-            for i in range(99):
-                methods.append(args.label2)
-            assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
-
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label2, linestyle='dotted')
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label2)
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label2, linestyle='dotted')
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label2)
-            plt.ylim(0, 1.1)
-        
-        if path3 is not None:
-            #my_data = np.genfromtxt('{}feasibility.csv'.format(arg), delimiter=',')
-            my_data = np.genfromtxt('{}'.format(path3), delimiter=',')
-            for i in range(99):
-                methods.append(args.label3)
-            assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
-
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label3, linestyle='dashed')
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label3)
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label3, linestyle='dashed')
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label3)
-            plt.ylim(0, 1.1)
-
-        if path4 is not None:
-            #my_data = np.genfromtxt('{}feasibility.csv'.format(args.path), delimiter=',')
-            my_data = np.genfromtxt('{}'.format(path4), delimiter=',')
-            for i in range(99):
-                methods.append(args.label4)
-            assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
-
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label4)
-            ax1.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label4)
-            plt.ylim(0, 1.1)
-
-        if path5 is not None:
-            #my_data = np.genfromtxt('{}feasibility.csv'.format(args.path), delimiter=',')
-            my_data = np.genfromtxt('{}'.format(path5), delimiter=',')
-            for i in range(99):
-                methods.append(args.label5)
-            assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
-
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label5)
-            ax2.plot(np.arange(len(my_data)), my_data, label=args.label5, linestyle='solid')
-            #ax1.plot(np.arange(len(my_data)), my_data, label=args.label5)
-            plt.ylim(0, 1.1)
-          
-        if path6 is not None:
-          #my_data = np.genfromtxt('{}feasibility.csv'.format(args.path), delimiter=',')
-          my_data = np.genfromtxt('{}'.format(path6), delimiter=',')
-          for i in range(99):
-              methods.append(args.label6)
-          assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
-
-          #plt.plot(np.arange(len(my_data)), my_data, label=args.label6)
-          ax2.plot(np.arange(len(my_data)), my_data, label=args.label6, linestyle='dotted')
-          #ax1.plot(np.arange(len(my_data)), my_data, label=args.label6)
-          plt.ylim(0, 1.1)
-
-        if path7 is not None:
-            #my_data = np.genfromtxt('{}feasibility.csv'.format(args.path), delimiter=',')
-            my_data = np.genfromtxt('{}'.format(path7), delimiter=',')
-            for i in range(99):
-                methods.append(args.label7)
-            assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
-
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label4, linestyle='dashdot')
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label4)
-            ax2.plot(np.arange(len(my_data)), my_data, label=args.label7, linestyle='solid')
-            plt.ylim(0, 1.1)
-
-        if path8 is not None:
-            #my_data = np.genfromtxt('{}feasibility.csv'.format(args.path), delimiter=',')
-            my_data = np.genfromtxt('{}'.format(path8), delimiter=',')
-            for i in range(99):
-                methods.append(args.label8)
-            assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
-
-            #plt.plot(np.arange(len(my_data)), my_data, label=args.label5)
-            ax2.plot(np.arange(len(my_data)), my_data, label=args.label8, linestyle='dashed')
-            plt.ylim(0, 1.1)
-          
-        if path9 is not None:
-          #my_data = np.genfromtxt('{}feasibility.csv'.format(args.path), delimiter=',')
-          my_data = np.genfromtxt('{}'.format(path9), delimiter=',')
-          for i in range(99):
-              methods.append(args.label9)
-          assigned_vars = np.concatenate((assigned_vars, assigned_vars, assigned_vars))
-
-          #plt.plot(np.arange(len(my_data)), my_data, label=args.label6)
-          #ax2.plot(np.arange(len(my_data)), my_data, label=args.label9, linestyle='dashdot')
-          plt.ylim(0, 1.1)
-
-        '''methods = np.asarray(methods)
-
-        dataset = []
-        for m, n, f in zip(methods, assigned_vars, my_data):
-            dataset.append([m, n, f])
-
-        cols = ['Method', '# filled cells', "Feasibility ratio"]
-        df = pandas.DataFrame(dataset, columns=cols)
-
-        ax = sns.lineplot(x='# filled cells', y="Feasibility ratio", hue="Method", style="Method", data=df)
-        plt.ylim(0, 1.1)'''
-        
-        ax1.set_title("Feasibility ratio - rows injection")
-        ax2.set_title("Feasibility ratio - full injection")
-        ax1.legend()
-        ax2.legend()
-        ax1.set_ylim([0, 1.1])
-        ax2.set_ylim([0, 1.1])
-        ax1.set_xlabel("# filled cells")
-        ax2.set_xlabel("# filled cells")
-        
-        '''plt.xlabel("# of filled cells")
-        plt.ylabel("Feasibility ratio")
-        plt.legend()'''
-        
-        plt.savefig(args.plot_title)
 
