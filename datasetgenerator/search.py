@@ -4,6 +4,7 @@
 from ortools.constraint_solver import pywrapcp as pycp
 import sys
 
+
 class SnailLexDecisionBuilder(pycp.PyDecisionBuilder):
     def __init__(self, X):
         pycp.PyDecisionBuilder.__init__(self)
@@ -64,8 +65,8 @@ class SubPDecisionBuilder(pycp.PyDecisionBuilder):
         k = self.K.Value()
         # View statistics about the previous attempt
         if k > 0:
-            # NOTE The number of fails should be corrected to take into account
-            # those due to the fake optimization process
+            # NOTE: The number of fails should be corrected to take into account those due to the fake optimization
+            #  process
             fails = slv.Failures() - self.stats['base_fails'] - 1
             self.all_fails += fails
             if fails >= self.failcap:

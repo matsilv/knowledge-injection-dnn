@@ -1,24 +1,25 @@
-# @author: Mattia Silvestri
+# Author: Mattia Silvestri
 
 """
 Main program.
 """
 
-import utility
-import numpy as np
-import matplotlib.pyplot as plt
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+from utility import PLSInstance, PLSSolver, random_assigner
+from models import MyModel
+import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import csv
 import argparse
 import time
-from models import MyModel
-import math
-import sys
+import pandas as pd
+
+########################################################################################################################
 
 # Set seed in order to reproduce results
-tf.random.set_seed(1)
+tf.random.set_seed(0)
 
 # Tensorflow 2 GPU setup
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -40,64 +41,50 @@ if gpus:
 parser = argparse.ArgumentParser()
 parser.add_argument("--dim", type=int, default=10, help="Problem dimension")
 parser.add_argument("--train", action="store_true",
-                    help="Train the model; if not set the default is test mode", default=False)
-parser.add_argument("--spec", action="store_true",
-                    help="Use model trained with an additional specializing constraint", default=False)
-parser.add_argument("--spec-constr", action="store_true",
-                    help="Additional specializing constraint", default=False)
-parser.add_argument("--size", type=int, default=0,
-                    help="Indexes size of the additional specializing contraint")
-parser.add_argument("--original", action="store_true",
-                    help="Original dataset; otherwise the dataset with an additional specializing " +
-                         "constraint is used", default=True)
+                    help="Train the model; if not set the default is test mode.", default=False)
 parser.add_argument("--test-num", default=None,
-                    help="Test identifier; view param.doc file for more details")
+                    help="Test identifier.")
 parser.add_argument("--num-epochs", default=300, type=int,
-                    help="Number of training epochs")
+                    help="Number of training epochs.")
 parser.add_argument("--max-size", default=1000000, type=int,
-                    help="Maximum number of dataset size to be loaded")
-parser.add_argument("--visualize", default=False, action="store_true",
-                    help="Visualize solutions and assignments frequencies")
-parser.add_argument("--load-mode" ,default="onehot", choices=["onehot", "string"],
-                    help="Dataset loading mode")
+                    help="Maximum number of training/test instances to be loaded.")
+parser.add_argument("--load-mode", default="onehot", choices=["onehot", "string"],
+                    help="Dataset loading mode.")
 parser.add_argument("--batch-size", default=1024, type=int,
-                    help="Mini-batch size")
+                    help="Mini-batch size.")
 parser.add_argument("--save-domains", action="store_true", default=False,
-                    help="Compute variables domains with forward checking propagator and save them in a CSV file")
-parser.add_argument("--save-partial-sols", action="store_true", default=False,
-                    help="Save partial solutions in a CSV file format")
+                    help="Compute variables domains with forward checking propagator and save them in a CSV file.")
 parser.add_argument("--leave-columns-domains", action="store_true", default=False,
-                    help="True if you don't want to prune columns domains values with fowrad checking")
+                    help="True if you don't want to prune columns domains values with forward checking.")
 parser.add_argument("--multiple", action="store_true", default=False,
                     help="Set this flag if you want to use the dataset coming from multiple random deconstruction "
-                                                                        + "of the same solutions pool")
+                         + "of the same solutions pool.")
 parser.add_argument("--num-sol", type=str, default="10k",
                     help="Number of solutions from which the training set has been generated; thousands are expressed "
-                         + "with k (for example 10000=10k)")
-parser.add_argument("--penalties-type", default=None, choices=["multi", "domains"],
-                    help="Penalties type to be used both for training and test")
-parser.add_argument("--model-type", default="agnostic", choices=["agnostic", "sbrinspiredloss", "confidences"],
-                    help="Choose the model type. agnostic is a simple Sequential model full agnostic. sbrinspiredloss "
-                         + "envelops the SBR-inspired loss function.")
+                         + "with k (for example 10000=10k).")
+parser.add_argument("--model-type", default="agnostic", choices=["agnostic", "sbrinspiredloss", "negative", "binary"],
+                    help="Choose the model type. 'agnostic' is the model-agnostic baseline. 'sbrinspiredloss', "
+                         + "'negative' and 'binary' are relatively the mse, negative and binary-cross entropy versions"
+                         + " of the SBR inspiredloss.")
 parser.add_argument("--validation-size", type=int, default=0,
-                    help="Validation set dimension. If zero no validation set is used")
-
+                    help="Validation set dimension. If zero no validation set is used.")
 parser.add_argument("--use-prop", action="store_true", default=False,
-                    help="True if you want to assist the with propagation method during evaluation time." +
-                         "A penalty type must be assigned.")
-
-parser.add_argument("--lmbd", default=1.0, type=float, help="Lambda for SBR-inspired term")
-
-parser.add_argument("--patience", default=5, type=int, help="Specify the number of 10 epochs intervals without improvment in " 
-                          "feasibility after which training is stopped")
+                    help="True if you want to assist the estimators with constraints propagation at evaluation time.")
+parser.add_argument("--rnd-feas", action="store_true", default=False,
+                    help="True if you want to compute feasibility ratio also for random estimator.")
+parser.add_argument("--lmbd", default=1.0, type=float, help="Lambda for SBR-inspired term.")
+parser.add_argument("--patience", default=5, type=int,
+                    help="Specify the number of 10 epochs intervals without improvement in "
+                         "feasibility after which training is stopped.")
 
 args = parser.parse_args()
-########################################################################################################################
 
-# Problem dimension
+# Problem dimension.
 DIM = int(args.dim)
 
-# Set training or test mode
+COLUMN_TYPES = [int() for _ in range(DIM**3)]
+
+# Set training or test mode.
 TRAIN = args.train
 if TRAIN:
     print("Training mode")
@@ -105,18 +92,6 @@ if TRAIN:
 else:
     print("Test mode")
     mode = "test"
-
-# Flag to specify which kind of dataset you want to use: the original one, or the one with additional specializing
-# constraint
-SPECIALIZED = args.spec
-
-# True if you want to check the additional specializing constraint
-SPECIALIZED_CONSTRAINT = args.spec_constr
-
-# Number of additional specialized constraint indexes to consider
-SIZE = int(args.size)
-
-ORIGINAL = args.original
 
 # Test number identifier
 TEST_NUM = args.test_num
@@ -126,9 +101,6 @@ EPOCHS = int(args.num_epochs)
 
 # Maximum number of data set examples to load
 MAX_SIZE = int(args.max_size)
-
-# Visualize partial and successive assignments frequencies in the data set
-VISUALIZE = args.visualize
 
 # Available loading mode are string and one-hot
 LOAD_MODE = args.load_mode
@@ -142,28 +114,11 @@ MODEL_TYPE = args.model_type
 # True if you want to save pruned variables domains in a CSV file
 SAVE_DOMAINS = args.save_domains
 
-# True if you want to save partial solutions in a CSV file format
-SAVE_PARTIAL_SOLS = args.save_partial_sols
-
 # Multiple random deconstrucion of solutions or uniques partial assignments
 if args.multiple:
     SOL_TYPE = "MULTIPLE"
 else:
     SOL_TYPE = "UNIQUES"
-
-if SPECIALIZED_CONSTRAINT:
-    print("Specialized constraint")
-else:
-    print("Standard constraint")
-
-# label for plotting
-if SPECIALIZED:
-    print("Specialized model")
-    label_name = "specialized"
-else:
-    print("Original model")
-    label_name = "original"
-label = "net trained on {} ds".format(label_name)
 
 if mode == "test":
     mode_char = "L"
@@ -171,173 +126,17 @@ if mode == "test":
 else:
     mode_char = "B"
 
-if ORIGINAL:
-    if not TRAIN:
-        file_name = "pls{}_10k".format(DIM)
-    else:
-        file_name = "pls{}_{}".format(DIM, args.num_sol)
+if not TRAIN:
+    file_name = "pls{}_10k".format(DIM)
 else:
-    file_name = "pls{}_checker_rule_size_{}".format(DIM, SIZE)
+    file_name = "pls{}_{}".format(DIM, args.num_sol)
 
 VAL_SIZE = args.validation_size
 
 NUM_SOL = args.num_sol
 
-########################################################################################################################
-# Create a validation set if specified
-
-validation_set = None
-
-if VAL_SIZE > 0:
-
-    # Create problem instance
-    val_problem = utility.PLSInstance(n=DIM, leave_columns_domains=args.leave_columns_domains)
-    init_val_prob = val_problem.copy()
-
-    # Load from test data
-    load_path = "datasets/pls{}/DS.PLS.A.UNIQUES.L.4.pls{}_10k.txt".format(DIM, DIM)
-
-    print("Loading validation data from {}".format(load_path))
-    start_time = time.time()
-
-    domains_filename = "datasets/pls{}/domains_test_10k.csv".format(DIM)
-
-    X_val, Y_val = utility.load_dataset(load_path, val_problem, max_size=math.inf, mode=LOAD_MODE, save_domains=SAVE_DOMAINS,
-                                domains_filename=domains_filename)
-    end_time = time.time()
-    print("Elapsed {} sec".format(end_time - start_time))
-
-    start_time = time.time()
-
-    if args.penalties_type == "domains":
-        # Loading domains data
-        print("Loading validation domains from {}".format(domains_filename))
-        penalties_val = utility.read_domains_from_csv(domains_filename, max_size=X_val.shape[0])
-        print()
-
-        penalties_val = penalties_val.reshape(penalties_val.shape[0], -1)
-        end_time = time.time()
-        print("Elapsed {} sec".format(end_time - start_time))
-    elif args.penalties_type == "multi":
-        # Create forbidden multi assignments
-        penalties_val = X_val.reshape((X_val.shape[0], DIM, DIM, DIM))
-        penalties_val = np.sum(penalties_val, axis=3)
-        penalties_val = np.repeat(penalties_val[:, :, :, np.newaxis], DIM, axis=3)
-        assert penalties_val.shape == (X_val.shape[0], DIM, DIM, DIM), penalties_val.shape
-        penalties_val = penalties_val.reshape(penalties_val.shape[0], -1)
-
-    indexes = np.random.choice(np.arange(0, X_val.shape[0]), size=VAL_SIZE)
-    X_val = X_val[indexes]
-    if args.penalties_type is not None:
-        penalties_val = penalties_val[indexes]
-    else:
-        penalties_val = np.zeros_like(X_val)
-    validation_set = (X_val, penalties_val)
-
-########################################################################################################################
-# Load training or test data
-
-# Create problem instance
-problem = utility.PLSInstance(n=DIM, leave_columns_domains=args.leave_columns_domains)
-init_prob = problem.copy()
-
-# Load training data
-load_path = "datasets/pls{}/DS.PLS.A.{}.{}.4.{}.txt".format(DIM, SOL_TYPE, mode_char, file_name)
-if not TRAIN:
-    load_path = "datasets/pls{}/DS.PLS.A.UNIQUES.L.4.{}.txt".format(DIM, file_name)
-
-print("Loading data from {}".format(load_path))
-start_time = time.time()
-domains_filename = "datasets/pls{}/domains_{}_{}.csv".format(DIM, mode, args.num_sol)
-if not TRAIN:
-    domains_filename = "datasets/pls{}/domains_{}_10k.csv".format(DIM, mode)
-
-if args.leave_columns_domains:
-    domains_filename = "datasets/pls{}/rows_propagation_domains_{}_{}.csv".format(DIM, mode, args.num_sol)
-
-X, Y = utility.load_dataset(load_path, problem, max_size=MAX_SIZE, mode=LOAD_MODE, save_domains=SAVE_DOMAINS,
-                            domains_filename=domains_filename, save_partial_solutions=SAVE_PARTIAL_SOLS,
-                            partial_sols_filename="partial_solutions_{}_{}.csv".format(NUM_SOL, mode),
-                            assignments_filename="assignments_{}_{}.csv".format(NUM_SOL, mode))
-end_time = time.time()
-print("Elapsed {} sec".format(end_time - start_time))
-
-exit()
-
-start_time = time.time()
-
-if args.penalties_type == "domains":
-    # Loading domains data
-    print("Loading domains from {}".format(domains_filename))
-    penalties = utility.read_domains_from_csv(domains_filename, max_size=X.shape[0])
-    print()
-
-    penalties = penalties.reshape(penalties.shape[0], -1)
-    end_time = time.time()
-    print("Elapsed {} sec".format(end_time - start_time))
-elif args.penalties_type == "multi":
-    # Create forbidden multi assignments
-    penalties = X.reshape((X.shape[0], DIM, DIM, DIM))
-    penalties = np.sum(penalties, axis=3)
-    penalties = np.repeat(penalties[:, :, :, np.newaxis], DIM, axis=3)
-    assert penalties.shape == (X.shape[0], DIM, DIM, DIM), penalties.shape
-    penalties = penalties.reshape(penalties.shape[0], -1)
-
-# Cast numpy array to int8 to save memory
-X = X.astype(np.int8)
-Y = Y.astype(np.int8)
-
-if args.penalties_type is not None:
-    penalties = penalties.astype(np.int8)
-else:
-    penalties = np.zeros_like(X)
-
-# visualize pruning effect with increasing size
-#X, Y, _ = utility.checker_pruning(X, Y, upper_bound=13, visualize=True)
-
-########################################################################################################################
-
-# Visualize data
-if VISUALIZE:
-    utility.visualize_dataset(X, Y, exit_end=VISUALIZE)
-
-# Create the model
-if MODEL_TYPE not in ['agnostic', 'sbrinspiredloss', 'confidences']:
-    raise Exception("Model type not valid")
-    exit(1)
-
-if TRAIN:
-    # Load confidence scores if the model type is confidences
-    if MODEL_TYPE == 'confidences':
-        if args.leave_columns_domains:
-            path = "plots/test-pls-{}-tf-keras/random/rows-prop/random_feasibility.csv".format(DIM)
-        else:
-            path = "plots/test-pls-{}-tf-keras/random/rows-and-columns-prop/random_feasibility.csv".format(DIM)
-
-        print("Loading confidences score from {}".format(path))
-        
-        confidences = np.genfromtxt('{}'.format(path), delimiter=',')
-        confidences = np.insert(confidences, 0, 1.0)
-        penalties, weights = utility.from_penalties_to_confidences(X, penalties, Y, confidences)
-        train_dataset = \
-            tf.data.Dataset.from_tensor_slices((X, Y, penalties, weights)).shuffle(X.shape[0]).batch(batch_size=BATCH_SIZE)
-    else:
-        weights = np.ones_like(penalties, dtype=np.float16)
-        #dataset = tf.data.Dataset.from_tensor_slices((X, Y, domains, multi_assign))
-        train_dataset = tf.data.Dataset.from_tensor_slices((X, Y, penalties, weights)).shuffle(10000).batch(batch_size=BATCH_SIZE)
-
-    print("Partial solutions memory size: {}".format(sys.getsizeof(X)))
-    print("Labels memory size: {}".format(sys.getsizeof(Y)))
-    print("Penalties memory size: {}".format(sys.getsizeof(penalties)))
-    print("Training set memory size: {}".format(sys.getsizeof(train_dataset)))
-
-model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=X.shape[1:], output_dim=DIM ** 3, method=MODEL_TYPE, lmbd=args.lmbd)
-
 # Model name for both training and test
-if not SPECIALIZED:
-    model_name = "original_dataset/test-{}/".format(TEST_NUM)
-else:
-    model_name = "specialized_solutions/test-{}/".format(TEST_NUM)
+model_name = "test-{}/".format(TEST_NUM)
 
 # Where to save plots
 SAVE_PATH = "plots/test-{}/".format(TEST_NUM)
@@ -345,12 +144,106 @@ try:
     os.makedirs(SAVE_PATH)
 except:
     print("Directory already exists")
+
+# Model name for both training and test
+model_name = "test-{}/".format(TEST_NUM)
+
+# Where to save plots
+SAVE_PATH = "plots/test-{}/".format(TEST_NUM)
+try:
+    os.makedirs(SAVE_PATH)
+except:
+    print("Directory already exists")
+
 ########################################################################################################################
 
+# Create a validation set if required
+val_indexes = None
+
+if VAL_SIZE > 0:
+    print("Loading validation set...")
+    start = time.time()
+    X_val = pd.read_csv("datasets/pls{}/partial_solutions_{}_train.csv".format(DIM, NUM_SOL),
+                        sep=',',
+                        header=None,
+                        nrows=MAX_SIZE,
+                        dtype=np.int8).values
+
+    # Create penalties for the examples
+    if MODEL_TYPE != 'agnostic':
+        P_val = pd.read_csv("datasets/pls{}/domains_train_{}.csv".format(DIM, NUM_SOL),
+                            sep=',',
+                            header=None,
+                            nrows=MAX_SIZE,
+                            dtype=np.int8).values
+    else:
+        P_val = np.zeros_like(X_val, dtype=np.int8)
+
+    end = time.time()
+    print("Elapsed {} seconds".format((end - start)))
+
+    val_indexes = np.random.choice(np.arange(0, X_val.shape[0]), size=VAL_SIZE, replace=False)
+    X_val = X_val[val_indexes]
+    P_val = P_val[val_indexes]
+    validation_set = (X_val, P_val)
+
+# Load training examples
+features_filepath = "datasets/pls{}/partial_solutions_{}_{}.csv".format(DIM, NUM_SOL, mode)
+print("Loading features from {}...".format(features_filepath))
+start = time.time()
+X = pd.read_csv(features_filepath, sep=',', header=None, nrows=MAX_SIZE, dtype=np.int8).values
+end = time.time()
+print("Elapsed {} seconds, {} GB required".format((end - start), X.nbytes / 10**9))
+print("Number of rows: {}".format(X.shape[0]))
+
+labels_filepath = "datasets/pls{}/assignments_{}_{}.csv".format(DIM, NUM_SOL, mode)
+print("Loading labels from {}...".format(labels_filepath))
+start = time.time()
+Y = pd.read_csv(labels_filepath, sep=',', header=None, nrows=MAX_SIZE, dtype=np.int32).values
+end = time.time()
+print("Elapsed {} seconds, {} GB required".format((end - start), Y.nbytes / 10**9))
+
+# Create penalties for the examples
+if MODEL_TYPE == 'agnostic' and not args.use_prop:
+    P = np.zeros_like(X, dtype=np.int8)
+else:
+    if not args.leave_columns_domains:
+        penalties_filepath = "datasets/pls{}/domains_{}_{}.csv".format(DIM, mode, NUM_SOL)
+    else:
+        penalties_filepath = "datasets/pls{}/rows_propagation_domains_{}_{}.csv".format(DIM, mode, NUM_SOL)
+
+    print("Loading penalties from {}...".format(penalties_filepath))
+    start = time.time()
+    P = pd.read_csv(penalties_filepath, sep=',', header=None, nrows=MAX_SIZE, dtype=np.int8).values
+end = time.time()
+print("Elapsed {} seconds, {} GB required".format((end - start), P.nbytes / 10**9))
+
+# Remove validation samples from the training set
+if val_indexes is not None:
+    X = np.delete(X, val_indexes, axis=0)
+    Y = np.delete(Y, val_indexes, axis=0)
+    P = np.delete(P, val_indexes, axis=0)
+
+# Create TF datasets
+dataset = tf.data.Dataset.from_tensor_slices((X, Y, P)).shuffle(10000).batch(BATCH_SIZE)
+
+# Create the model
+model = MyModel(num_layers=2,
+                num_hidden=[512, 512],
+                input_shape=X.shape[1:],
+                output_dim=DIM ** 3,
+                method=MODEL_TYPE,
+                lmbd=args.lmbd)
+
 # Train model
-if TRAIN:    
-    history = model.train(EPOCHS, train_dataset, "models/{}".format(model_name), DIM, validation_set, args.use_prop, 
-      args.patience)
+if TRAIN:
+    history = model.train(EPOCHS,
+                          dataset,
+                          "models/{}".format(model_name),
+                          DIM,
+                          validation_set,
+                          args.use_prop,
+                          args.patience)
 
     for name in history.keys():
         values = history[name]
@@ -369,10 +262,9 @@ if TRAIN:
     exit(0)
 
 else:
-     # model.load_weights("models/{}".format(model_name))
      model.model = tf.saved_model.load("models/{}".format(model_name))
 
-########################################################################################################################
+################################################################################
 
 # Test the model
 
@@ -380,8 +272,9 @@ else:
 tensor_X = X.astype(np.float32)
 predict_val = model.predict_from_saved_model(tensor_X).numpy()
 
+# Prune values according to constraints propagator if required
 if args.use_prop:
-    predict_val *= (1 - penalties)
+    predict_val *= (1 - P)
 
 # Count of correct predictions grouped by number of assigned variables
 pred_by_num_assigned = np.zeros(shape=(DIM ** 2))
@@ -401,36 +294,22 @@ acc_rand = 0
 
 # Compute accuracy grouped by number of assigned variables
 preds = []
-for x, pred, y, d in zip(X, predict_val, Y, penalties):
+for x, pred, y, d in zip(X, predict_val, Y, P):
 
     if count % 1000 == 0:
         print("Examined {} instances".format(count))
-
-    '''utility.visualize(x.reshape(10, 10, 10))
-    print()
-    utility.visualize(y.reshape(10, 10, 10))
-    print()
-    for i in range(DIM):
-      for j in range(DIM):
-        print(d.reshape(10, 10, 10)[i, j])
-      print()
-    print('------------------------------------------------------------------')
-
-    exit(0)'''
 
     num_assigned_vars = np.sum(x.astype(np.int8))
     pred_label = np.argmax(pred.reshape(-1))
     correct_label = np.argmax(y.reshape(-1))
 
-    #print("N. assigned features: {} | Prediction: {} | Label: {}".format(num_assigned_vars, pred_label, correct_label))
-
     if pred_label == correct_label:
         acc += 1
         pred_by_num_assigned[num_assigned_vars] += 1
 
-    # Create a problem instance with current training example for net prediction
+    # Create a problem instance with current examples for net prediction
     square = np.reshape(x, (DIM, DIM, DIM))
-    pls = utility.PLSInstance(n=DIM)
+    pls = PLSInstance(n=DIM)
     pls.square = square.copy()
     # assert pls.__check_constraints__(), "Constraints should be verified before assignment"
 
@@ -441,16 +320,15 @@ for x, pred, y, d in zip(X, predict_val, Y, penalties):
     # Local consistency
     local_feas = pls.assign(assignment[0], assignment[1], assignment[2])
 
-    vals_square = np.argmax(square, axis=2) + np.sum(square, axis=2)
+    '''vals_square = np.argmax(square, axis=2) + np.sum(square, axis=2)
     solver = utility.PLSSolver(DIM, square=np.reshape(vals_square, -1))
     res = solver.solve()
-    assert res, "Constraint solver is wrong because the input comes from a real solution"
+    assert res, "Constraint solver is wrong because the input comes from a real solution"'''
 
     # Global consistency
     if local_feas:
         vals_square = np.argmax(pls.square.copy(), axis=2) + np.sum(pls.square.copy(), axis=2)
-        solver = utility.PLSSolver(DIM, square=np.reshape(vals_square, -1), specialized=SPECIALIZED_CONSTRAINT,
-                                   size=SIZE)
+        solver = PLSSolver(DIM, square=np.reshape(vals_square, -1))
         feas = solver.solve()
     else:
         feas = local_feas
@@ -458,124 +336,87 @@ for x, pred, y, d in zip(X, predict_val, Y, penalties):
     if feas:
         feas_by_num_assigned[num_assigned_vars] += 1
 
-    ####################################################################################################################
+    # Check random assignment performance if required
+    if args.rnd_feas:
+        if not args.use_prop:
+            d = None
+        rand_assignment = random_assigner(DIM ** 3, d)
+        if rand_assignment == correct_label:
+            acc_rand += 1
+            rand_pred_by_num_assigned[num_assigned_vars] += 1
 
-    # check random assignment performance
-    rand_assignment = utility.random_assigner(DIM ** 3, d)
-    if rand_assignment == correct_label:
-        acc_rand += 1
-        rand_pred_by_num_assigned[num_assigned_vars] += 1
+        # Create a problem instance with current training example for random prediction
+        square = np.reshape(x, (DIM, DIM, DIM))
+        pls = PLSInstance(n=DIM)
+        pls.square = square.copy()
+        #assert pls.__check_constraints__(), "Constraints should be verified before assignment"
 
-    # create a problem instance with current training example for random prediction
-    square = np.reshape(x, (DIM, DIM, DIM))
-    pls = utility.PLSInstance(n=DIM)
-    pls.square = square.copy()
-    #assert pls.__check_constraints__(), "Constraints should be verified before assignment"
+        # Make the random assignment
+        rand_assignment = np.unravel_index(rand_assignment, shape=(DIM, DIM, DIM))
 
-    # make the random assignment
-    rand_assignment = np.unravel_index(rand_assignment, shape=(DIM, DIM, DIM))
+        local_feas = pls.assign(rand_assignment[0], rand_assignment[1], rand_assignment[2])
 
-    local_feas = pls.assign(rand_assignment[0], rand_assignment[1], rand_assignment[2])
+        # Check global consistency
+        if local_feas:
+            vals_square = np.argmax(pls.square.copy(), axis=2) + np.sum(pls.square.copy(), axis=2)
+            solver = PLSSolver(DIM, square=np.reshape(vals_square, -1))
+            feas = solver.solve()
+        else:
+            feas = local_feas
 
-    # global consistency
-    if local_feas:
-        vals_square = np.argmax(pls.square.copy(), axis=2) + np.sum(pls.square.copy(), axis=2)
-        solver = utility.PLSSolver(DIM, square=np.reshape(vals_square, -1), specialized=SPECIALIZED_CONSTRAINT,
-                                   size=SIZE)
-        feas = solver.solve()
-    else:
-        feas = local_feas
-
-    if feas:
-        rand_feas_by_num_assigned[num_assigned_vars] += 1
-    ####################################################################################################################
-
-    '''print("Assignment: (x:{},y:{},val:{}) | Feasible: {}".format(assignment[0], assignment[1], assignment[2]+1, feas))
-    pls.visualize()
-    _ = input("Press to continue...")'''
+        if feas:
+            rand_feas_by_num_assigned[num_assigned_vars] += 1
 
     # Increase count of solutions with this number of assignments
     tot_by_num_assigned[num_assigned_vars] += 1
     count += 1
 
+    # Save results checkpoint
     if count % 1000 == 0:
       
-      feasibility = list((feas_by_num_assigned / (tot_by_num_assigned + 1e-8))[1:])
-      # Feasibility plot
-      plt.plot(np.arange(1, DIM ** 2), feasibility,
-              label=label)
-      plt.ylim((0.0, 1.1))
-      plt.legend()
-      plt.savefig("feasibility_{}.png".format(mode))
-      plt.close()
+        feasibility = list((feas_by_num_assigned / (tot_by_num_assigned + 1e-8))[1:])
 
-      if not args.use_prop:
-        filename = "{}/feasibility_{}.csv".format(SAVE_PATH, mode)
-      else:
-        if args.leave_columns_domains:
-            filename = "{}/feasibility_{}_with_row_prop.csv".format(SAVE_PATH, mode)
+        if not args.use_prop:
+            filename = "{}/feasibility_{}.csv".format(SAVE_PATH, mode)
         else:
-          filename = "{}/feasibility_{}_with_full_prop.csv".format(SAVE_PATH, mode) 
+            if args.leave_columns_domains:
+                filename = "{}/feasibility_{}_with_row_prop.csv".format(SAVE_PATH, mode)
+            else:
+                filename = "{}/feasibility_{}_with_full_prop.csv".format(SAVE_PATH, mode)
 
-      with open(filename, "w") as epoch_file:
-        wr = csv.writer(epoch_file)
-        wr.writerow(feasibility)
+        with open(filename, "w") as epoch_file:
+            wr = csv.writer(epoch_file)
+            wr.writerow(feasibility)
 
 # Check accuracy is correctly computed
 assert np.sum(pred_by_num_assigned) == acc and np.sum(tot_by_num_assigned) == count, \
     "acc: {} | acc_vectorized: {} | count: {} | count_vectorized: {}".format(acc, np.sum(pred_by_num_assigned),
                                                                              count, np.sum(tot_by_num_assigned))
 
-print("Accuracy: {} | Random accuracy: {}".format(acc / count, acc_rand / count))
-
-########################################################################################################################
-
 # Make plots
 
 accuracy = list((pred_by_num_assigned / (tot_by_num_assigned + 1e-8))[1:])
 feasibility = list((feas_by_num_assigned / (tot_by_num_assigned + 1e-8))[1:])
+if args.rnd_feas:
+    random_feasibility = list((rand_feas_by_num_assigned / (tot_by_num_assigned + 1e-8))[1:])
 
-# Accuracy plot
+# Save random assigner results
+if args.rnd_feas:
+    RANDOM_SAVE_PATH = "plots/test-pls-{}-tf-keras/random/".format(DIM)
 
-plt.plot(np.arange(1, DIM ** 2), accuracy,
-         label=label)
-plt.legend()
-plt.ylim((0.0, 1.1))
-plt.savefig("accuracy_{}.png".format(mode))
-plt.close()
+    if args.use_prop:
+        if not args.leave_columns_domains:
+            RANDOM_SAVE_PATH += "rows-and-columns-prop"
+        else:
+            RANDOM_SAVE_PATH += "rows-prop"
+    else:
+        RANDOM_SAVE_PATH += "no-prop"
 
-# Feasibility plot
-plt.plot(np.arange(1, DIM ** 2), feasibility,
-         label=label)
-plt.ylim((0.0, 1.1))
-plt.legend()
-plt.savefig("feasibility_{}.png".format(mode))
-plt.close()
+    try:
+        os.makedirs(RANDOM_SAVE_PATH)
+    except:
+        print("Directory {} already exists".format(RANDOM_SAVE_PATH))
 
-# Assignment frequencies plot
-plt.plot(np.arange(1, DIM ** 2), tot_by_num_assigned[1:])
-plt.savefig("Number of variables assigned frequencies {}.png".format(mode))
-plt.close()
-
-random_feasibility = list((rand_feas_by_num_assigned / (tot_by_num_assigned + 1e-8))[1:])
-
-# Random feasibility
-
-plt.plot(np.arange(1, DIM ** 2), random_feasibility,
-         label=label)
-plt.ylim((0.0, 1.1))
-plt.legend()
-plt.savefig("random_feasibility.png".format(mode))
-
-# write results on csv files
-with open("{}/accuracy_{}.csv".format(SAVE_PATH, mode), "w") as epoch_file:
-    wr = csv.writer(epoch_file)
-    wr.writerow(accuracy)
-
-with open("{}/feasibility_{}.csv".format(SAVE_PATH, mode), "w") as epoch_file:
-    wr = csv.writer(epoch_file)
-    wr.writerow(feasibility)
-
-with open("{}/random_feasibility.csv".format(SAVE_PATH, mode), "w") as epoch_file:
-    wr = csv.writer(epoch_file)
-    wr.writerow(random_feasibility)
+    with open("{}/random_feasibility.csv".format(RANDOM_SAVE_PATH, mode), "w") as epoch_file:
+        wr = csv.writer(epoch_file)
+        wr.writerow(random_feasibility)

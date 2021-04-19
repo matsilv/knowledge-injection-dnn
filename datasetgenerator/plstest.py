@@ -23,24 +23,16 @@ import gzip
 import numpy as np
 import tensorflow as tf
 import os
-from scipy.special import softmax
+
 cwd = os.getcwd()
 import sys
-from scipy.special import softmax
-# insert at 1, 0 is the script path (or '' in REPL)
-sys.path.insert(1, '{}/../'.format(cwd))
-
 from models import MyModel
-
 from datasetgenerator import common, search
 
-
-#reload(common)
-
-#reload(search)
+########################################################################################################################
 
 
-class PLSFormatter():
+class PLSFormatter:
     def __init__(self, n, frm):
         self.frm = frm
         self.n = n
@@ -163,21 +155,9 @@ class MSDNNDecisionBuilder(pycp.PyDecisionBuilder):
                 if best is None or best > x.Size():
                     var, varidx = x, i
                     best = x.Size()
-        # Choose a value based on the scores
-        vals = []
-        probs = []
 
         # Choose value to be assigned among the feasible ones according to net output probability
-        ''' for v in x.DomainIterator():
-            vals.append(v)
-            probs.append(scores[varidx * n + v - 1])
-
-        # Normalize probabilities
-        probs = np.asarray(probs)
-        probs /= probs.sum() '''
-
         var = x
-        val = int(np.random.choice(vals, p=probs))
 
         # Choose the best value predicted by the network
         best, val = None, None
@@ -192,91 +172,35 @@ class MSDNNDecisionBuilder(pycp.PyDecisionBuilder):
 ########################################################################################################################
 
 
-def checker_rule(size):
-    """
-    Method to find indexes for checker rule.
-    Example of checker rule indexes for 4x4 PLS:
-     0  8  1  9
-    10  2 11  3
-     4 12  5 13
-    14  6 15  7
-    :param size: number of indexed to be considered
-    :return: indexes as numpy array
-    """
-    # checker indexes
-    checker_idxs = np.arange(0, 100)
-    first_checker_idxs = checker_idxs[(checker_idxs % 2 == ((checker_idxs // 10) % 2))]
-    second_checker_idxs = checker_idxs[(checker_idxs % 2 != ((checker_idxs // 10) % 2))]
-    checker_idxs = np.append(first_checker_idxs, second_checker_idxs)
-    checker_idxs = checker_idxs[0:size]
-
-    return checker_idxs
-
-########################################################################################################################
-
-
-def checker_rule_v2(size):
-    """
-    Method to find indexes for checker rule version 2.
-    Example of checker rule version 2 indexes for 4x4 PLS.
-    8  0  9  1
-    2 10  3 11
-   12  4 13  5
-    6 14  7 15
-    :param size: number of indexes to be considered
-    :return: indexes as numpy array
-    """
-    # checker indexes
-    checker_idxs = np.arange(0, 100)
-    second_checker_idxs = checker_idxs[(checker_idxs % 2 == ((checker_idxs // 10) % 2))]
-    first_checker_idxs = checker_idxs[(checker_idxs % 2 != ((checker_idxs // 10) % 2))]
-    checker_idxs = np.append(first_checker_idxs, second_checker_idxs)
-    checker_idxs = checker_idxs[0:size]
-
-    return checker_idxs
-
-########################################################################################################################
-
-
 if __name__ == '__main__':
     # Build a command line parser
     desc = 'A testing solver for the PLS problem.'
     parser = argparse.ArgumentParser(description=desc)
     # Configure the parser
     parser.add_argument('infile', nargs='?', default=None,
-            help='The name of the file with the instances. If missing, '+
-            'the solver will read from the standard input')
-    # parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'),
-    #         default=sys.stdout)
+            help='The name of the file with the instances. If missing, the solver will read from the standard input')
     parser.add_argument('-s', '--seed', type=int, default=100,
             help='Seed for the Random Number Generator')
     parser.add_argument('--input-format',
             choices=['csv', 'bin', 'bits'], default='csv',
-            help='Format for the input instances; "csv" will use a '+
-            'comma-separted list of values for PLS rows (a 0 means empty); '+
-            '"bin" will do the same, except that a one-hot encoding of the '+
-            'numbers will be used; in this case, all zeros will mean '+
-            'an empty cell' + '; "bits" will use a string of 0-1 values to represent the PLS instance')
+            help='Format for the input instances; "csv" will use a comma-separted list of values for PLS rows' +
+            ' (a 0 means empty); "bin" will do the same, except that a one-hot encoding of the numbers will be used; ' +
+                 'in this case, all zeros will mean an empty cell' + '; "bits" will use a string of 0-1 values to ' +
+            'represent the PLS instance')
     parser.add_argument('--output-format',
             choices=['friendly', 'csv', 'bin'], default='friendly',
-            help='Format for the output instances; "friendly" will use a '+
-            'matrix of numbers (the Latin Square); "csv" will use a '+
-            'comma-separted list PLS rows (a 0 means empty); '+
-            '"bin" will do the same, except that a one-hot encoding of the '+
-            'numbers will be used; in this case, all zeros will mean '+
-            'an empty cell')
+            help='Format for the output instances; "friendly" will use a matrix of numbers (the Latin Square); "csv" ' +
+                 'will use a comma-separted list PLS rows (a 0 means empty); "bin" will do the same, except that a ' +
+                 'one-hot encoding of the numbers will be used; in this case, all zeros will mean an empty cell')
     parser.add_argument('--search-strategy',
             choices=['ms', 'rnd', 'snail-lex', 'snail-ms', 'snail-dnn', 'snail-msdnn'],
             default='ms',
-            help='Search strategy to be used: "ms" will use a default '+
-            'min size domain heuristic (and lexicographic value selection); '+
-            '"snail-lex" will use python-built lexicographic search; '+
-            '"snail-ms" will use a python-built min size domain heuristic; '+
-            '"snail-dnn" will use a pyhon-built, DNN driven search')
+            help='Search strategy to be used: "ms" will use a default min size domain heuristic (and lexicographic '
+                 'value selection); "snail-lex" will use python-built lexicographic search; "snail-ms" will use a '
+                 'python-built min size domain heuristic; "snail-dnn" will use a pyhon-built, DNN driven search')
     parser.add_argument('--dnn-fstem',
             default=None,
-            help='File stem for the DNN. This argument is required if the '+
-            '"snail-dnn" search is used')
+            help='File stem for the DNN. This argument is required if the "snail-dnn" search is used')
     parser.add_argument('--print-inst', action='store_true',
             help='Print the instance in csv format (useful for debugging)')
     parser.add_argument('--no-print-sol', action='store_true',
@@ -357,13 +281,6 @@ if __name__ == '__main__':
                 slv.Add(slv.AllDifferent([X[i,j] for j in range(n)]))
             if add_columns_constraints:
                 slv.Add(slv.AllDifferent([X[j,i] for j in range(n)]))
-            '''for j in range(n):
-                for j2 in range(j+1, n):
-                    #slv.Add(X[i, j] != X[i, j2])
-                    #slv.Add(X[j, i] != X[j2, i])
-                    slv.Add( (X[i, j] == X[i, j2]) <= (X[i, j] != X[i, j2]) ) 
-                    slv.Add( (X[j, i] == X[j2, i]) <= (X[j, i] != X[j2, i]) )'''
-
 
     # Load a DNN, in case the "snail-dnn" search has been requested
     if args.search_strategy in ('snail-dnn', 'snail-msdnn'):
@@ -379,22 +296,6 @@ if __name__ == '__main__':
     stats = {}
     # Configure search
     flatX = [X[i,j] for i in range(n) for j in range(n)]
-
-    # additional constraints
-    constraint = args.constraint
-
-    if constraint == "checker":
-        idxs = checker_rule(int(args.size))
-        for idx in idxs:
-            slv.Add(flatX[idx] != 1)
-
-    elif constraint == "checker-v2":
-        idxs = checker_rule_v2(int(args.size))
-        for idx in idxs:
-            slv.Add(flatX[idx] != 2)
-
-    elif constraint != 'none':
-        raise Exception("Constraint type {} is not valid".format(constraint))
 
     if args.search_strategy == 'ms':
         db = slv.Phase(flatX, slv.CHOOSE_MIN_SIZE, slv.ASSIGN_MIN_VALUE)
@@ -433,8 +334,3 @@ if __name__ == '__main__':
     # Generate the instances
     slv.ReSeed(args.seed)
     slv.Solve(dball, monitors)
-
-    '''print()
-    print("All fails: {}".format(subpdb.stats['all_fails']))
-    print()
-    print("Overcaps: {}".format(subpdb.stats['overcap']))'''

@@ -1,25 +1,32 @@
-# @Author: Mattia Silvestri
+# Author: Mattia Silvestri
 
 """
     Implementation of constraints propagation as regularization terms in TensorFlow 2.
 """
 
 import tensorflow as tf
-from utility import compute_feasibility_from_predictions
+from utility import compute_feasibility_from_predictions, visualize
 
 
 ########################################################################################################################
 
+
 class MyModel(tf.keras.Model):
-    def __init__(self, num_layers, num_hidden, input_shape, output_dim, method='agnostic', lmbd=1.0):
+    def __init__(self,
+                 num_layers,
+                 num_hidden,
+                 input_shape,
+                 output_dim,
+                 method='agnostic',
+                 lmbd=1.0):
         """
-        Abstract class implementing fully-connected feedforward NN.
-        :param num_layers: number of hidden layers; as integer
-        :param num_hidden: number of hidden units for each layer; as a list of integers
-        :param input_shape: input shape required by tf.keras; as a tuple
-        :param output_dim: number of output neurons; as integer
-        :param method: method to be applied to the NN; as string
-        :param lmbd: lambda for SBR-inspired loss term
+        tk.keras.Model subclassing to implement the SBR-inspired regularization.
+        :param num_layers: number of hidden layers; as integer.
+        :param num_hidden: number of hidden units for each layer; as a list of integers.
+        :param input_shape: input shape required by tf.keras; as a tuple.
+        :param output_dim: number of output neurons; as integer.
+        :param method: method to be applied to the NN; as string.
+        :param lmbd: lambda for SBR-inspired loss term.
         """
 
         super(MyModel, self).__init__(name="mymodel")
@@ -36,13 +43,13 @@ class MyModel(tf.keras.Model):
         # Lambda for SBR-inspired loss term
         self.lmbd = lmbd
 
-        # build the neural net model
-        self.__define_model__(input_shape)
+        # Build the neural net model
+        self._define_model(input_shape)
 
-        # define the optimizer
-        self.__define_optimizer__()
+        # Define the optimizer
+        self._define_optimizer()
 
-    def __define_model__(self, input_shape):
+    def _define_model(self, input_shape):
 
         self.model = tf.keras.Sequential()
 
@@ -51,7 +58,7 @@ class MyModel(tf.keras.Model):
             self.model.add(tf.keras.layers.Dense(self.num_hidden[i], activation=tf.nn.relu))
         self.model.add(tf.keras.layers.Dense(self.output_dim))
 
-    def __define_optimizer__(self):
+    def _define_optimizer(self):
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
     @tf.function
@@ -61,7 +68,7 @@ class MyModel(tf.keras.Model):
         :param inputs: input instances.
         :param targets: target instances.
         :param penalties: penalties instances.
-        :return: loss values and gradients
+        :return: loss values and gradients.
         """
 
         with tf.GradientTape() as tape:
@@ -83,26 +90,26 @@ class MyModel(tf.keras.Model):
         :return: loss value.
         """
 
-        # each element is 1 if that value in that position cannot be assigned, 0 otherwise
+        # Each element is 1 if that value in that position cannot be assigned, 0 otherwise
         tensor_p = tf.cast(tensor_p, dtype=tf.float32)
         tensor_y = tf.cast(tensor_y, dtype=tf.float32)
         tensor_X = tf.cast(tensor_X, dtype=tf.float32)
 
         y_pred = self.model(tensor_X)
 
-        # supervised loss function
+        # Categorical cross-entropy loss.
         cross_entropy_loss = \
             tf.reduce_mean(tf.keras.losses.categorical_crossentropy(tensor_y, y_pred, from_logits=True))
 
-        # SBR inspired loss
+        # MSE loss.
         sbr_inspired_loss = \
             tf.reduce_mean(tf.reduce_sum(tf.square((1 - tensor_p) - tf.nn.sigmoid(y_pred)), axis=1))
 
-        # "Negative" loss
+        # "Negative" loss.
         negative_sbr_loss = tf.reduce_sum(tensor_p * tf.nn.sigmoid(y_pred))
         negative_sbr_loss = tf.reduce_mean(negative_sbr_loss)
 
-        # Binary cross-entropy
+        # Binary cross-entropy loss.
         binary_cross_entropy = \
             tf.reduce_mean(tf.keras.losses.binary_crossentropy((1 - tensor_p), y_pred, from_logits=True))
 
@@ -121,28 +128,35 @@ class MyModel(tf.keras.Model):
     def predict_from_saved_model(self, X, logits=False):
         """
         Make predictions given input instances from tf 2 SavedModel.
-        :param X: input instances as numpy array with shape=input_shape
-        :param logits: True if the method should return logits instead of a probability distribution; as boolean
-        :return: numpy array of shape=(?, num_classes)
+        :param X: input instances as numpy array with shape=input_shape.
+        :param logits: True if the method should return logits instead of a probability distribution; as boolean.
+        :return: numpy array of shape=(None, num_classes).
         """
 
         X_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
 
         # Keras signatures is serving default
         infer = self.model.signatures["serving_default"]
-        # make inference
+        # Make inference
         pred_tensor = infer(X_tensor)
 
-        # inference output is a dictionary; last layer is the output one
+        # Inference output is a dictionary; last layer is the output one
         pred_tensor = pred_tensor["dense_{}".format(self.num_layers)]
 
-        # output layer returns logits
+        # Output layer returns logits
         if not logits:
             pred_tensor = tf.nn.softmax(tf.cast(pred_tensor, dtype=tf.float32))
 
         return pred_tensor
 
-    def train(self, num_epochs, train_ds, ckpt_dir, dim, val_set, use_prop, patience):
+    def train(self,
+              num_epochs,
+              train_ds,
+              ckpt_dir,
+              dim,
+              val_set,
+              use_prop,
+              patience):
         """
         Train the model.
         :param num_epochs: number of training epochs
@@ -188,8 +202,7 @@ class MyModel(tf.keras.Model):
                 y = tf.one_hot(y, depth=dim**3, dtype=tf.int8)
                 y = tf.reshape(y, [y.shape[0], -1])
 
-                '''idx = 0
-
+                idx = 0
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
                 p_numpy = p.numpy()
@@ -200,9 +213,9 @@ class MyModel(tf.keras.Model):
                 print()
                 for i in range(dim):
                     for j in range(dim):
-                        print(p_numpy[i,j])
+                        print(p_numpy[i, j])
                     print()
-                exit()'''
+                exit()
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 
@@ -225,14 +238,6 @@ class MyModel(tf.keras.Model):
                 if val_set is not None:
                     x_val = val_set[0]
                     p_val = val_set[1]
-
-                    '''visualize(x_val[120].reshape(10, 10, 10))
-                    p_val = p_val[120].reshape(10, 10, 10)
-                    print()
-                    for i in range(10):
-                        for j in range(10):
-                            print(p_val[i,j])
-                        print()'''
 
                     preds = self.model(x_val)
 

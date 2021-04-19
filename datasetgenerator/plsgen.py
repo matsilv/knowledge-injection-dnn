@@ -53,52 +53,6 @@ class StoreDecisionBuilder(pycp.PyDecisionBuilder):
 ########################################################################################################################
 
 
-def checker_rule(size):
-    """
-    Method to find indexes for checker rule.
-    Example of checker rule indexes for 4x4 PLS:
-     0  8  1  9
-    10  2 11  3
-     4 12  5 13
-    14  6 15  7
-    :param size: number of indexed to be considered
-    :return: indexes as numpy array
-    """
-    # checker indexes
-    checker_idxs = np.arange(0, 100)
-    first_checker_idxs = checker_idxs[(checker_idxs % 2 == ((checker_idxs // 10) % 2))]
-    second_checker_idxs = checker_idxs[(checker_idxs % 2 != ((checker_idxs // 10) % 2))]
-    checker_idxs = np.append(first_checker_idxs, second_checker_idxs)
-    checker_idxs = checker_idxs[0:size]
-
-    return checker_idxs
-
-########################################################################################################################
-
-
-def checker_rule_v2(size):
-    """
-    Method to find indexes for checker rule version 2.
-    Example of checker rule version 2 indexes for 4x4 PLS.
-    8  0  9  1
-    2 10  3 11
-   12  4 13  5
-    6 14  7 15
-    :param size: number of indexes to be considered
-    :return: indexes as numpy array
-    """
-    # checker indexes
-    checker_idxs = np.arange(0, 100)
-    second_checker_idxs = checker_idxs[(checker_idxs % 2 == ((checker_idxs // 10) % 2))]
-    first_checker_idxs = checker_idxs[(checker_idxs % 2 != ((checker_idxs // 10) % 2))]
-    checker_idxs = np.append(first_checker_idxs, second_checker_idxs)
-    checker_idxs = checker_idxs[0:size]
-
-    return checker_idxs
-
-########################################################################################################################
-
-
 if __name__ == '__main__':
     # Build a command line parser
     parser = argparse.ArgumentParser(description='Generate PLS instances')
@@ -113,7 +67,7 @@ if __name__ == '__main__':
             choices=['friendly', 'csv', 'bin'], default='friendly',
             help='Format for displaying the instances. "friendly" will use '+
             'the most natural format (a matrix of integers); "csv" will ' +
-            'flatten the square in a vectore (by rows); "bin1" will do the ' +
+            'flatten the square in a vectore (by rows); "bin" will do the ' +
             'same using a one-hot encoding (by number and then row).')
     parser.add_argument('-b', '--bias',
             choices=['none', 'fwd', 'bwd'], default='none',
@@ -123,18 +77,11 @@ if __name__ == '__main__':
             'generation probability for all PLSs. Chosing "bwd" will use ' +
             'the reversed ordering')
 
-    parser.add_argument('--constraint',
-                        choices=['none', 'checker', 'checker-v2'], default='none',
-                        help='Generate solutions considering the additional constraint')
-    parser.add_argument('--size',
-                        default=0,
-                        help='How many constraint rule indexes to consider')
     # Parse command line options
     args = parser.parse_args()
 
     # Extract the most frequently used options
     n = args.order
-    constraint = args.constraint
     # Build a solver
     slv = pycp.Solver('PLS Instance generator')
     # Build the variables
@@ -147,18 +94,6 @@ if __name__ == '__main__':
 
     # Configure search
     allvars = [X[i,j] for i in range(n) for j in range(n)]
-    if constraint == "checker":
-        idxs = checker_rule(int(args.size))
-        for idx in idxs:
-            slv.Add(allvars[idx] != 1)
-
-    elif constraint == "checker-v2":
-        idxs = checker_rule_v2(int(args.size))
-        for idx in idxs:
-            slv.Add(allvars[idx] != 2)
-
-    elif constraint != 'none':
-        raise Exception("Constraint type {} is not valid".format(constraint))
 
     if args.bias == 'none':
         db = slv.Phase(allvars, slv.CHOOSE_RANDOM, slv.ASSIGN_RANDOM_VALUE)

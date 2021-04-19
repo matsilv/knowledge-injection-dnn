@@ -1,0 +1,6 @@
+tensorflow==2.3.0
+ortools==6.10.6025
+numpy==1.18.5
+pandas==1.2.4
+seaborn==0.11.1
+matplotlib==3.4.1
