@@ -23,8 +23,10 @@ import gzip
 import numpy as np
 import tensorflow as tf
 import os
+from scipy.special import softmax
 cwd = os.getcwd()
 import sys
+from scipy.special import softmax
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, '{}/../'.format(cwd))
 
@@ -109,13 +111,24 @@ class DNNDecisionBuilder(pycp.PyDecisionBuilder):
         maxscore = None
         var, val = None, None
         for i, x in enumerate(self.X):
+
             if not x.Bound():
+
+                vals = []
+                probs = []
+
+                # Choose value to be assigned among the feasible ones according to net output probability
                 for v in x.DomainIterator():
-                    score = scores[i * n + v - 1]
-                    if maxscore is None or score > maxscore:
-                        maxscore = score
-                        var = x
-                        val = v
+                    vals.append(v)
+                    probs.append(scores[i * n + v - 1])
+
+                # Normalize probabilities
+                probs = np.asarray(probs)
+                probs /= probs.sum()
+
+                var = x
+                val = int(np.random.choice(vals, p=probs))
+
         # Open a choice point
         return slv.AssignVariableValue(var, val)
 
@@ -155,16 +168,16 @@ class MSDNNDecisionBuilder(pycp.PyDecisionBuilder):
         probs = []
 
         # Choose value to be assigned among the feasible ones according to net output probability
-        for v in x.DomainIterator():
-            '''vals.append(v)
+        ''' for v in x.DomainIterator():
+            vals.append(v)
             probs.append(scores[varidx * n + v - 1])
 
         # Normalize probabilities
         probs = np.asarray(probs)
-        probs /= probs.sum()
+        probs /= probs.sum() '''
 
         var = x
-        val = int(np.random.choice(vals, p=probs))'''
+        val = int(np.random.choice(vals, p=probs))
 
         # Choose the best value predicted by the network
         best, val = None, None
@@ -282,6 +295,8 @@ if __name__ == '__main__':
                         help='Remove rows constraints to the solver')
     parser.add_argument('--rm-columns-constraints', action='store_true',
                         help='Remove columns constraints to the solver')
+    parser.add_argument('--max-size', type=int, default=10000,
+            help='Maximum number of input solutions to be loaded')
 
     # Parse command line options
     args = parser.parse_args()
@@ -289,11 +304,18 @@ if __name__ == '__main__':
     # Define a function to read instance data
     def read(data, frm):
         orders, bmark = [], []
+        count = 0
         for rcd in data:
+            count += 1
+            # print(count)
             # Parse the input instances
             n, prb = read_pls(rcd, frm)
             orders.append(n)
             bmark.append(prb)
+
+            if count == args.max_size:
+                break
+
         return orders, bmark
 
     # Open the input file and read the input instances
@@ -396,7 +418,7 @@ if __name__ == '__main__':
     frmI = None
     if args.print_inst:
         frmI = PLSFormatter(n, 'csv')
-    subpdb = search.SubPDecisionBuilder(X, K, bmark, stats, frmI)
+    subpdb = search.SubPDecisionBuilder(X, K, bmark, stats, frmI, args.failcap)
     # Build the overall search strategy
     inner_monitors = []
     if args.timeout > 0:
@@ -411,3 +433,8 @@ if __name__ == '__main__':
     # Generate the instances
     slv.ReSeed(args.seed)
     slv.Solve(dball, monitors)
+
+    '''print()
+    print("All fails: {}".format(subpdb.stats['all_fails']))
+    print()
+    print("Overcaps: {}".format(subpdb.stats['overcap']))'''

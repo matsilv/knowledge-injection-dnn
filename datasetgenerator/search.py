@@ -48,7 +48,7 @@ class SnailMinSizeDecisionBuilder(pycp.PyDecisionBuilder):
 
 
 class SubPDecisionBuilder(pycp.PyDecisionBuilder):
-    def __init__(self, X, K, bmark, stats, frm=None):
+    def __init__(self, X, K, bmark, stats, frm=None, failcap=0):
         pycp.PyDecisionBuilder.__init__(self)
         self.X = X
         self.bmark = bmark
@@ -57,6 +57,7 @@ class SubPDecisionBuilder(pycp.PyDecisionBuilder):
         self.frm = frm
         self.over_cap = 0
         self.all_fails = 0
+        self.failcap = failcap
 
     def Next(self, slv):
         # Read the minimum value in the K variable
@@ -67,13 +68,16 @@ class SubPDecisionBuilder(pycp.PyDecisionBuilder):
             # those due to the fake optimization process
             fails = slv.Failures() - self.stats['base_fails'] - 1
             self.all_fails += fails
-            if fails >= 10000:
+            if fails >= self.failcap:
               self.over_cap += 1
             time = (slv.WallTime() - self.stats['base_time']) / 1000.0
-            print('Attempt: %d | fails: %d, time: %.3f, all fails: %d, over cap: %d' % (k, fails, time, self.all_fails, self.over_cap))
+            # print('Attempt: %d | fails: %d, time: %.3f | all fails: %d | over cap: %d' % (k, fails, time, self.all_fails, self.over_cap))
+            
         # Update statistics
         self.stats['base_fails'] = slv.Failures()
         self.stats['base_time'] = slv.WallTime()
+        self.stats['all_fails'] = self.all_fails
+        self.stats['overcap'] = self.over_cap
 
         # Force all assignments for the k-th instace
         for i in self.bmark[k]:
@@ -107,8 +111,8 @@ class StoreDecisionBuilder(pycp.PyDecisionBuilder):
         if self.verbose:
             sys.stdout.write(self.frm.format(self.X))
             sys.stdout.write("\n")
-        else:
-            sys.stdout.write('T')
+        '''else:
+            sys.stdout.write('T')'''
         return None
 
 

@@ -257,8 +257,8 @@ if args.leave_columns_domains:
 
 X, Y = utility.load_dataset(load_path, problem, max_size=MAX_SIZE, mode=LOAD_MODE, save_domains=SAVE_DOMAINS,
                             domains_filename=domains_filename, save_partial_solutions=SAVE_PARTIAL_SOLS,
-                            partial_sols_filename="partial_sols_pls{}_{}_{}.csv".format(DIM, NUM_SOL, mode),
-                            assignments_filename="assignments_pls{}_{}_{}.csv".format(DIM, NUM_SOL, mode))
+                            partial_sols_filename="partial_solutions_{}_{}.csv".format(NUM_SOL, mode),
+                            assignments_filename="assignments_{}_{}.csv".format(NUM_SOL, mode))
 end_time = time.time()
 print("Elapsed {} sec".format(end_time - start_time))
 

@@ -893,11 +893,13 @@ def read_solutions_from_csv(filename, dim, max_size=100000):
         # count of examined solutions
         count_solutions = 0
 
-        freq_count = np.zeros(shape=(dim**2, ))
-
         for line in csv_reader:
+            if len(line) != dim ** 3:
+              continue
+            assert len(line) == dim**3
             one_hot_sol = [int(c) for c in line]
             one_hot_sol = np.asarray(one_hot_sol)
+            num_assigned_vars = np.sum(one_hot_sol)
             reshaped_sol = np.reshape(one_hot_sol, (dim, dim, dim))
             #print("Number of assigned variables: {}".format(np.sum(one_hot_sol)))
             problem = PLSInstance()
@@ -1121,13 +1123,12 @@ def from_penalties_to_confidences(partial_solutions, penalties, labels, confiden
 
     return confidence_scores, weights
 
-
 ########################################################################################################################
 
 
 def make_subplots(nested_path, n_subplots, labels, titles, pls_sizes=[7, 10, 12]):
     sns.set_style('darkgrid')
-    linestyles = ['solid', 'dotted', 'dashed', 'dashdot', (0, (1, 10)), (0, (5, 10))]
+    linestyles = ['solid', 'solid', 'dotted', 'dashed', 'dashdot', (0, (3, 1, 1, 1, 1, 1)), (0, (5, 10))]
     assert len(nested_path) == n_subplots
     plt.rcParams["figure.figsize"] = (20, 15)
     fig, axis = plt.subplots(1, n_subplots, sharey=True)
@@ -1146,7 +1147,7 @@ def make_subplots(nested_path, n_subplots, labels, titles, pls_sizes=[7, 10, 12]
             feasibilities = np.genfromtxt(path, delimiter=',')
             ax.plot(np.arange(len(feasibilities)), feasibilities, linestyle=linestyles[path_idx])
         if subp_idx == 0:
-            ax.legend(labels, fontsize=16)
+            ax.legend(labels, fontsize=16, loc='lower left')
 
         ax.set_title(titles[subp_idx], fontweight='bold', fontsize='18')
     plt.show()
@@ -1157,54 +1158,32 @@ def make_subplots(nested_path, n_subplots, labels, titles, pls_sizes=[7, 10, 12]
 if __name__ == '__main__':
     read_solutions_from_csv(filename='solutions/pls12/model_agnostic_100k-sols_no_prop.csv', dim=12, max_size=100000)
     print()
-    read_solutions_from_csv(filename='solutions/pls12/sbr_rows_100k-sols_no_prop.csv', dim=12, max_size=100000)
+    read_solutions_from_csv(filename='solutions/pls12/sbr_full_all_ts_no_prop.csv', dim=12, max_size=100000)
     print()
     read_solutions_from_csv(filename='solutions/pls12/sbr_full_100k-sols_no_prop.csv', dim=12, max_size=100000)
     exit()
 
-    '''nested_path = [['plots/test-pls-7-tf-keras/model-agnostic/all-ts/run-1/feasibility_test_with_full_prop.csv',
-      'plots/test-pls-7-tf-keras/sbr-inspired-loss/all-ts/rows/run-1/feasibility_test_with_full_prop.csv',
-      'plots/test-pls-7-tf-keras/sbr-inspired-loss/all-ts/full/run-1/feasibility_test_with_full_prop.csv',
-      'plots/test-pls-7-tf-keras/random/rows-and-columns-prop/random_feasibility.csv'],
+    nested_path = [['plots/test-pls-7-tf-keras/random/rows-prop/random_feasibility.csv',
+                    'plots/test-pls-7-tf-keras/random/rows-and-columns-prop/random_feasibility.csv',
+                    'plots/test-pls-7-tf-keras/model-agnostic/100-sols/run-1/feasibility_test.csv',
+                    'plots/test-pls-7-tf-keras/sbr-inspired-loss/100-sols/rows/run-1/feasibility_test.csv',
+                    'plots/test-pls-7-tf-keras/sbr-inspired-loss/100-sols/full/run-1/feasibility_test.csv'
+                    ],
+                   ['plots/test-pls-10-tf-keras/random/rows-prop/random_feasibility.csv',
+                    'plots/test-pls-10-tf-keras/random/rows-and-columns-prop/random_feasibility.csv',
+                    'plots/test-pls-10-tf-keras/model-agnostic/100-sols/run-1/feasibility_test.csv',
+                    'plots/test-pls-10-tf-keras/sbr-inspired-loss/100-sols/rows/run-1/feasibility_test.csv',
+                    'plots/test-pls-10-tf-keras/sbr-inspired-loss/100-sols/full/run-1/feasibility_test.csv'
+                    ],
+                   ['plots/test-pls-12-tf-keras/random/rows-prop/random_feasibility.csv',
+                    'plots/test-pls-12-tf-keras/random/rows-and-columns-prop/random_feasibility.csv',
+                    'plots/test-pls-12-tf-keras/model-agnostic/100-sols/run-1/feasibility_test.csv',
+                    'plots/test-pls-12-tf-keras/sbr-inspired-loss/100-sols/rows/run-1/feasibility_test.csv',
+                    'plots/test-pls-12-tf-keras/sbr-inspired-loss/100-sols/full/run-1/feasibility_test.csv'
+                    ]]
 
-                   ['plots/test-pls-10-tf-keras/model-agnostic/all-ts/run-3/feasibility_test_with_full_prop.csv',
-                    'plots/test-pls-10-tf-keras/sbr-inspired-loss/all-ts/rows/run-3/feasibility_test_with_full_prop.csv',
-                    'plots/test-pls-10-tf-keras/sbr-inspired-loss/all-ts/full/run-3/feasibility_test_with_full_prop.csv',
-                    'plots/test-pls-10-tf-keras/random/rows-and-columns-prop/random_feasibility.csv'],
+    labels = ['rnd-rows', 'rnd-full', 'agn', 'mse-rows', 'mse-full']
+    titles = ['PLS-7', 'PLS-10', 'PLS-12']
 
-                   ['plots/test-pls-12-tf-keras/model-agnostic/all-ts/run-1/feasibility_test_with_full_prop.csv',
-                    'plots/test-pls-12-tf-keras/sbr-inspired-loss/all-ts/rows/run-1/feasibility_test_with_full_prop.csv',
-                    'plots/test-pls-12-tf-keras/sbr-inspired-loss/all-ts/full/run-1/feasibility_test_with_full_prop.csv',
-                    'plots/test-pls-12-tf-keras/random/rows-and-columns-prop/random_feasibility.csv']
-                   ]'''
-
-    nested_path = [
-        ['plots/test-pls-12-tf-keras/random/rows-prop/random_feasibility.csv',
-        'plots/test-pls-12-tf-keras/sbr-inspired-loss/all-ts/rows/run-1/feasibility_test.csv',
-        'plots/test-pls-12-tf-keras/sbr-inspired-loss/all-ts/rows/run-2/feasibility_test.csv',
-        'plots/test-pls-12-tf-keras/model-agnostic/all-ts/run-1/feasibility_test.csv'],
-        ['plots/test-pls-12-tf-keras/random/rows-and-columns-prop/random_feasibility.csv',
-         'plots/test-pls-12-tf-keras/sbr-inspired-loss/all-ts/full/run-1/feasibility_test.csv',
-         'plots/test-pls-12-tf-keras/sbr-inspired-loss/all-ts/full/run-2/feasibility_test.csv',
-         'plots/test-pls-12-tf-keras/model-agnostic/all-ts/run-1/feasibility_test.csv']
-    ]
-
-    '''nested_path = [['plots/test-pls-7-tf-keras/model-agnostic/35k-ts/run-1/feasibility_test.csv',
-                    'plots/test-pls-7-tf-keras/sbr-inspired-loss/35k-ts/rows/run-1/feasibility_test.csv',
-                    'plots/test-pls-7-tf-keras/sbr-inspired-loss/35k-ts/full/run-1/feasibility_test.csv'],
-
-                   ['plots/test-pls-10-tf-keras/model-agnostic/70k-ts/run-1/feasibility_test.csv',
-                    'plots/test-pls-10-tf-keras/sbr-inspired-loss/70k-ts/rows/run-1/feasibility_test.csv',
-                    'plots/test-pls-10-tf-keras/sbr-inspired-loss/70k-ts/full/run-1/feasibility_test.csv'],
-
-                   ['plots/test-pls-12-tf-keras/model-agnostic/100k-ts/run-1/feasibility_test.csv',
-                    'plots/test-pls-12-tf-keras/sbr-inspired-loss/100k-ts/rows/run-1/feasibility_test.csv',
-                    'plots/test-pls-12-tf-keras/sbr-inspired-loss/100k-ts/full/run-1/feasibility_test.csv']
-                   ]'''
-
-    labels = ['rnd', 'lambda: 1', 'lambda: 0.01', 'agn']
-    titles = ['Rows', 'Full']
-
-    make_subplots(nested_path, n_subplots=2, labels=labels, titles=titles, pls_sizes=[7, 10, 12])
-
+    make_subplots(nested_path, n_subplots=3, labels=labels, titles=titles, pls_sizes=[7, 10, 12])
 

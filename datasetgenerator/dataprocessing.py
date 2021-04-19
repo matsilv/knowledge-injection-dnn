@@ -456,8 +456,8 @@ def create_dataset_A(filename, ratio, solution_num):
                       "." + filename + ".txt", 'w')
         '''c_file = open("DS.PLS.A.COLLAPSED.B." + str(ratio) +
                               "." + filename + ".txt", 'w')'''
-        u_file = open("DS.PLS.A.UNIQUES.B." + str(ratio) +
-                            "." + filename + ".txt", 'w')
+        '''u_file = open("DS.PLS.A.UNIQUES.B." + str(ratio) +
+                            "." + filename + ".txt", 'w')'''
 
         '''multi_label_file = open("DS.PLS.A.MULTILABEL.B." + str(ratio) +
                       "." + filename + ".txt", 'w')'''
@@ -492,8 +492,8 @@ def create_dataset_A(filename, ratio, solution_num):
             num = random.randint(0,num_targets-1)
             targets = list(sub[subsolution])
             target = targets[num]
-            u_file.write(subsolution + "-" + state_to_string(target)
-                + "\n")
+            '''u_file.write(subsolution + "-" + state_to_string(target)
+                + "\n")'''
             
             sum_te += num_targets
             if num_targets < min_te:
@@ -510,7 +510,7 @@ def create_dataset_A(filename, ratio, solution_num):
             c_file.write(subsolution + "-" +
                          state_to_string(sub_coll[subsolution]) + "\n")'''
 
-        u_file.close()
+        # u_file.close()
         #c_file.close()
         m_file.close()
     
@@ -535,10 +535,10 @@ def create_dataset_A(filename, ratio, solution_num):
         print("Train subsolutions created")
         
         # write the files
-        c_file = open("DS.PLS.A.COLLAPSED.L." + str(ratio) +
-                             "." + filename + ".txt", 'w')
-        u_file = open("DS.PLS.A.UNIQUES.L." + str(ratio) +
-                             "." + filename + ".txt", 'w')
+        '''c_file = open("DS.PLS.A.COLLAPSED.L." + str(ratio) +
+                             "." + filename + ".txt", 'w')'''
+        '''u_file = open("DS.PLS.A.UNIQUES.L." + str(ratio) +
+                             "." + filename + ".txt", 'w')'''
         m_file = open("DS.PLS.A.MULTIPLE.L." + str(ratio) +
                              "." + filename + ".txt", 'w')
         
@@ -561,8 +561,8 @@ def create_dataset_A(filename, ratio, solution_num):
             num = random.randint(0,num_targets-1)
             targets = list(sub[subsolution])
             target = targets[num]
-            u_file.write(subsolution + "-" + state_to_string(target)
-                + "\n")
+            '''u_file.write(subsolution + "-" + state_to_string(target)
+                + "\n")'''
             
             sum_tr += num_targets
             if num_targets < min_tr:
@@ -572,11 +572,11 @@ def create_dataset_A(filename, ratio, solution_num):
                 max_tr = num_targets
         
         for subsolution in sub_coll.keys():
-            c_file.write(subsolution + "-" +
-                         state_to_string(sub_coll[subsolution]) + "\n")
+            '''c_file.write(subsolution + "-" +
+                         state_to_string(sub_coll[subsolution]) + "\n")'''
     
-        u_file.close()
-        c_file.close()
+        #u_file.close()
+        #c_file.close()
         m_file.close()
     
         tr_sub_len = len(sub.keys())

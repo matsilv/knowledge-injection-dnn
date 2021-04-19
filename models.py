@@ -1,13 +1,11 @@
 # @Author: Mattia Silvestri
 
 """
-    Implementation of SBR-inspired loss function in TensorFlow 2.
+    Implementation of constraints propagation as regularization terms in TensorFlow 2.
 """
 
 import tensorflow as tf
-import numpy as np
-
-from utility import compute_feasibility_from_predictions, visualize
+from utility import compute_feasibility_from_predictions
 
 
 ########################################################################################################################
@@ -30,7 +28,7 @@ class MyModel(tf.keras.Model):
         self.num_hidden = num_hidden
         self.output_dim = output_dim
 
-        available_methods = ['agnostic', 'sbrinspiredloss', 'confidences']
+        available_methods = ['agnostic', 'sbrinspiredloss', 'negative', 'binary']
         if method not in available_methods:
             raise Exception("Method selected not valid")
         self.method = method
@@ -60,10 +58,9 @@ class MyModel(tf.keras.Model):
     def grad(self, inputs, targets, penalties):
         """
         Compute loss and gradients.
-        :param inputs: input instances
-        :param targets: target instances
-        :param penalties: penalties instances
-        :param weights: weights to solve balancing issues
+        :param inputs: input instances.
+        :param targets: target instances.
+        :param penalties: penalties instances.
         :return: loss values and gradients
         """
 
@@ -80,11 +77,10 @@ class MyModel(tf.keras.Model):
     def compute_loss(self, tensor_X, tensor_y, tensor_p):
         """
         Compute SBR loss function.
-        :param tensor_X: input instances as tf.Tensor with shape=(batch_size, n**3)
-        :param tensor_y: instances' labels as tf.Tensor of shape=(batch_size, n**3)
-        :param tensor_p: penalties as tf.Tensor of shape=(batch_size, n**3)
-        :param tensor_w: weights as tf.Tensor of shape=(batch_size, n**3)
-        :return: loss value
+        :param tensor_X: input instances as tf.Tensor with shape=(batch_size, n**3).
+        :param tensor_y: instances' labels as tf.Tensor of shape=(batch_size, n**3).
+        :param tensor_p: penalties as tf.Tensor of shape=(batch_size, n**3).
+        :return: loss value.
         """
 
         # each element is 1 if that value in that position cannot be assigned, 0 otherwise
@@ -95,61 +91,29 @@ class MyModel(tf.keras.Model):
         y_pred = self.model(tensor_X)
 
         # supervised loss function
-        cross_entropy_loss = tf.reduce_mean(tf.keras.losses.categorical_crossentropy(tensor_y, y_pred, from_logits=True))
+        cross_entropy_loss = \
+            tf.reduce_mean(tf.keras.losses.categorical_crossentropy(tensor_y, y_pred, from_logits=True))
 
         # SBR inspired loss
-        sbr_inspired_loss = tf.reduce_mean(tf.reduce_sum(tf.square((1 - tensor_p) - tf.nn.sigmoid(y_pred)), axis=1))
+        sbr_inspired_loss = \
+            tf.reduce_mean(tf.reduce_sum(tf.square((1 - tensor_p) - tf.nn.sigmoid(y_pred)), axis=1))
 
-        '''idx = 0
-        p_numpy = tensor_p.numpy()
-        y_numpy = tensor_y.numpy()
-        x_numpy = tensor_X.numpy()
-        w_numpy = tensor_w.numpy()
+        # "Negative" loss
+        negative_sbr_loss = tf.reduce_sum(tensor_p * tf.nn.sigmoid(y_pred))
+        negative_sbr_loss = tf.reduce_mean(negative_sbr_loss)
 
-        p_numpy = p_numpy[idx].reshape(10, 10, 10)
-        w_numpy = w_numpy[idx].reshape(10, 10, 10)
-        print('--------------------- Partial solution ----------------------')
-        visualize(x_numpy[idx].reshape(10, 10, 10))
-        print()
-        print('--------------------- Assignment ---------------------')
-        visualize(y_numpy[idx].reshape(10, 10, 10))
-        print()
-        print('--------------------- Penalties ------------------------')
-        for i in range(10):
-            for j in range(10):
-                print(p_numpy[i, j])
-            print()
-
-        print()
-        print('--------------------- Weights ---------------------------')
-        for i in range(10):
-            for j in range(10):
-                print(w_numpy[i, j])
-            print()
-
-        bce = tf.nn.sigmoid_cross_entropy_with_logits(tensor_p, y_pred) * tensor_w
-        bce_numpy = bce.numpy()
-        bce_numpy = bce_numpy[idx].reshape(10, 10, 10)
-        print()
-        print('------------------- Binary cross-entropy ---------------------')
-        for i in range(10):
-            print(bce_numpy[i])
-            print()
-
-        label = np.argmax(y_numpy)
-        label = np.unravel_index(label, (10, 10, 10))
-        print(label)
-        print(bce_numpy[label])
-        exit()'''
-
-        ''''binary_cross_entropy = tf.reduce_mean(
-            tf.keras.losses.binary_crossentropy(tensor_p, y_pred, from_logits=True)) '''
+        # Binary cross-entropy
+        binary_cross_entropy = \
+            tf.reduce_mean(tf.keras.losses.binary_crossentropy((1 - tensor_p), y_pred, from_logits=True))
 
         if self.method == 'sbrinspiredloss':
-            print(self.lmbd)
             loss = cross_entropy_loss + sbr_inspired_loss * self.lmbd
         elif self.method == 'agnostic':
             loss = cross_entropy_loss
+        elif self.method == 'negative':
+            loss = cross_entropy_loss + negative_sbr_loss * self.lmbd
+        elif self.method == 'binary':
+            loss = cross_entropy_loss + binary_cross_entropy * self.lmbd
 
         return loss, cross_entropy_loss, sbr_inspired_loss
 
@@ -225,7 +189,6 @@ class MyModel(tf.keras.Model):
                 y = tf.reshape(y, [y.shape[0], -1])
 
                 '''idx = 0
-                dim = 12
 
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
@@ -235,8 +198,8 @@ class MyModel(tf.keras.Model):
                 print()
                 visualize(y_numpy[idx].reshape(dim, dim, dim))
                 print()
-                for i in range(10):
-                    for j in range(10):
+                for i in range(dim):
+                    for j in range(dim):
                         print(p_numpy[i,j])
                     print()
                 exit()'''
@@ -295,16 +258,13 @@ class MyModel(tf.keras.Model):
                       break
 
             print(
-                "Epoch {:03d}: Loss: {:.5f} | Cross entropy loss: {:.5f}, SBR inspired loss: {:.8f}, Accuracy: {:.5%}".format(
+                "Epoch {:03d}: Loss: {:.5f}, Accuracy: {:.5%}".format(
                     epoch,
                     epoch_loss_avg.result(),
-                    epoch_cross_entropy_loss_avg.result(),epoch_sbr_inspired_loss_avg.result(),
                     epoch_accuracy.result()))
 
         # save a dictionary with epochs losses
         history["loss"] = loss_history
-        history["cross_entropy_loss"] = cross_entropy_loss_history
-        history["sbr_inspired_loss"] = sbr_inspired_loss_history
 
         return history
 
