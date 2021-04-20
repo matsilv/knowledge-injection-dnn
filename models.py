@@ -202,7 +202,7 @@ class MyModel(tf.keras.Model):
                 y = tf.one_hot(y, depth=dim**3, dtype=tf.int8)
                 y = tf.reshape(y, [y.shape[0], -1])
 
-                idx = 0
+                '''idx = 0
                 x_numpy = x.numpy()
                 y_numpy = y.numpy()
                 p_numpy = p.numpy()
@@ -215,7 +215,7 @@ class MyModel(tf.keras.Model):
                     for j in range(dim):
                         print(p_numpy[i, j])
                     print()
-                exit()
+                exit()'''
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 
@@ -260,7 +260,7 @@ class MyModel(tf.keras.Model):
                         print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
 
                     if count_not_improved == patience:
-                      break
+                        break
 
             print(
                 "Epoch {:03d}: Loss: {:.5f}, Accuracy: {:.5%}".format(

@@ -1,3 +1,5 @@
+# Author: Mattia Silvestri
+
 from utility import load_dataset, PLSInstance
 import argparse
 
@@ -21,13 +23,17 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     leave_columns_domains = False
+    save_domains = False
     if args.domains_type == 'rows':
         leave_columns_domains = True
+        save_domains = True
+    elif args.domains_type == 'full':
+        save_domains = True
 
     load_dataset(filename=args.filename,
                  problem=PLSInstance(n=args.dim, leave_columns_domains=leave_columns_domains),
                  mode="onehot",
-                 save_domains=args.save_domains,
+                 save_domains=save_domains,
                  domains_filename=args.domains_filename,
                  save_partial_solutions=True,
                  partial_sols_filename=args.partial_sols_filename,

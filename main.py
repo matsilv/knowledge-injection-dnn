@@ -52,13 +52,8 @@ parser.add_argument("--load-mode", default="onehot", choices=["onehot", "string"
                     help="Dataset loading mode.")
 parser.add_argument("--batch-size", default=1024, type=int,
                     help="Mini-batch size.")
-parser.add_argument("--save-domains", action="store_true", default=False,
-                    help="Compute variables domains with forward checking propagator and save them in a CSV file.")
 parser.add_argument("--leave-columns-domains", action="store_true", default=False,
                     help="True if you don't want to prune columns domains values with forward checking.")
-parser.add_argument("--multiple", action="store_true", default=False,
-                    help="Set this flag if you want to use the dataset coming from multiple random deconstruction "
-                         + "of the same solutions pool.")
 parser.add_argument("--num-sol", type=str, default="10k",
                     help="Number of solutions from which the training set has been generated; thousands are expressed "
                          + "with k (for example 10000=10k).")
@@ -73,7 +68,7 @@ parser.add_argument("--use-prop", action="store_true", default=False,
 parser.add_argument("--rnd-feas", action="store_true", default=False,
                     help="True if you want to compute feasibility ratio also for random estimator.")
 parser.add_argument("--lmbd", default=1.0, type=float, help="Lambda for SBR-inspired term.")
-parser.add_argument("--patience", default=5, type=int,
+parser.add_argument("--patience", default=10, type=int,
                     help="Specify the number of 10 epochs intervals without improvement in "
                          "feasibility after which training is stopped.")
 
@@ -111,18 +106,8 @@ BATCH_SIZE = int(args.batch_size)
 # True if you want to adopt SRB-inspired loss function
 MODEL_TYPE = args.model_type
 
-# True if you want to save pruned variables domains in a CSV file
-SAVE_DOMAINS = args.save_domains
-
-# Multiple random deconstrucion of solutions or uniques partial assignments
-if args.multiple:
-    SOL_TYPE = "MULTIPLE"
-else:
-    SOL_TYPE = "UNIQUES"
-
 if mode == "test":
     mode_char = "L"
-    SOL_TYPE = "UNIQUES"
 else:
     mode_char = "B"
 

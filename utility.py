@@ -547,8 +547,7 @@ def compute_feasibility_from_predictions(X, preds, dim):
         # Global consistency
         if local_feas:
             vals_square = np.argmax(pls.square.copy(), axis=2) + np.sum(pls.square.copy(), axis=2)
-            solver = PLSSolver(dim, square=np.reshape(vals_square, -1), specialized=False,
-                                       size=0)
+            solver = PLSSolver(dim, square=np.reshape(vals_square, -1))
             feas = solver.solve()
         else:
             feas = local_feas

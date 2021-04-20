@@ -26,6 +26,8 @@ import os
 
 cwd = os.getcwd()
 import sys
+# insert at 1, 0 is the script path (or '' in REPL)
+sys.path.insert(1, '{}/../'.format(cwd))
 from models import MyModel
 from datasetgenerator import common, search
 
