@@ -136,3 +136,7 @@ dmypy.json
 
 # Ignore dataset files
 DS.*.txt
+
+/models
+
+/datasets

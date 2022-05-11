@@ -598,35 +598,3 @@ def make_subplots(nested_path, n_subplots, labels, titles, pls_sizes=[7, 10, 12]
 ########################################################################################################################
 
 
-if __name__ == '__main__':
-    # This is an example of how to visualize constraints violations
-    read_solutions_from_csv(filename='solutions/pls12/model_agnostic_100k-sols_no_prop.csv', dim=12, max_size=100000)
-    print()
-    read_solutions_from_csv(filename='solutions/pls12/sbr_full_all_ts_no_prop.csv', dim=12, max_size=100000)
-    print()
-    read_solutions_from_csv(filename='solutions/pls12/sbr_full_100k-sols_no_prop.csv', dim=12, max_size=100000)
-
-    # This is an example on how to visualize 'feasibility plots'
-    paths = [['plots/test-pls-7-tf-keras/random/rows-prop/random_feasibility.csv',
-              'plots/test-pls-7-tf-keras/random/rows-and-columns-prop/random_feasibility.csv',
-              'plots/test-pls-7-tf-keras/model-agnostic/100-sols/run-1/feasibility_test.csv',
-              'plots/test-pls-7-tf-keras/sbr-inspired-loss/100-sols/rows/run-1/feasibility_test.csv',
-              'plots/test-pls-7-tf-keras/sbr-inspired-loss/100-sols/full/run-1/feasibility_test.csv'],
-
-             ['plots/test-pls-10-tf-keras/random/rows-prop/random_feasibility.csv',
-              'plots/test-pls-10-tf-keras/random/rows-and-columns-prop/random_feasibility.csv',
-              'plots/test-pls-10-tf-keras/model-agnostic/100-sols/run-1/feasibility_test.csv',
-              'plots/test-pls-10-tf-keras/sbr-inspired-loss/100-sols/rows/run-1/feasibility_test.csv',
-              'plots/test-pls-10-tf-keras/sbr-inspired-loss/100-sols/full/run-1/feasibility_test.csv'],
-
-             ['plots/test-pls-12-tf-keras/random/rows-prop/random_feasibility.csv',
-              'plots/test-pls-12-tf-keras/random/rows-and-columns-prop/random_feasibility.csv',
-              'plots/test-pls-12-tf-keras/model-agnostic/100-sols/run-1/feasibility_test.csv',
-              'plots/test-pls-12-tf-keras/sbr-inspired-loss/100-sols/rows/run-1/feasibility_test.csv',
-              'plots/test-pls-12-tf-keras/sbr-inspired-loss/100-sols/full/run-1/feasibility_test.csv']]
-
-    lbls = ['rnd-rows', 'rnd-full', 'agn', 'mse-rows', 'mse-full']
-    tls = ['PLS-7', 'PLS-10', 'PLS-12']
-
-    make_subplots(paths, n_subplots=3, labels=lbls, titles=tls, pls_sizes=[7, 10, 12])
-
