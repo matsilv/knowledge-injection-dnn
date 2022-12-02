@@ -140,3 +140,4 @@ DS.*.txt
 /models
 
 /datasets
+notebooks/datasets

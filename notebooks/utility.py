@@ -292,9 +292,9 @@ def load_dataset(filename,
             csv_writer = csv.writer(domains_file, delimiter=',')
 
         if save_partial_solutions:
-            partial_sols_file = open(partial_sols_filename, "w", newline='')
+            partial_sols_file = open(partial_sols_filename, "w")
             csv_writer_sols = csv.writer(partial_sols_file, delimiter=',')
-            assignments_file = open(assignments_filename, "w", newline='')
+            assignments_file = open(assignments_filename, "w") 
             csv_writer_assignments = csv.writer(assignments_file, delimiter=',')
 
         dim = problem.n
