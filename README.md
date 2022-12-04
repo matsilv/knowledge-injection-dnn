@@ -10,7 +10,7 @@ The PLS-7 is chosen as demonstrating example:
     `datasetgenerator/plsgen.py -o 7 -n 10000 -f bin > pls7_10k.csv`.
 2)  Create the CSV file with the partial solutions - assignments pairs.  
     1) Create the file with uniques partial solutions - assignments pairs.  
-    `python datasetgenerator/dataprocessing.py -n pls7_10k.csv`  
+    `python datasetgenerator/dataprocessing.py -n pls7_10k`  
     `DS.PLS.A.UNIQUES.B.4.pls7_10k.txt`: training set.  
     `DS.PLS.A.UNIQUES.L.4.pls7_10k.txt`: test set.  
     Then convert them to csv file and save the variables' domains after constraints propagation. For the example:
@@ -28,12 +28,12 @@ The PLS-7 is chosen as demonstrating example:
     solutions pool). 
     `python datasetgenerator/dataprocessing.py -n pls7_100.csv --sol-num 100 --iter-num 100` 
     
-3) Move the files created in the previous steps in a directory named `dataset/pls7`.
+3) Move the files created in the previous steps in a directory named `datasets/pls7`.
 
 4) Train and test the models.
     1. Here is an example for the model-agnostic NN:  
     `python main.py --dim 7 --train --test-num pls-7/model-agnostic/all-ts/run-1 --num-epochs 10000 --max-size 1000000 
-    --batch-size 2048 --num-sol 10k --model-type agnostic --validation-size 5000`  
+    --batch-size 2048 --num-sol 10k --model-type agnostic --validation-size 5000 --patience 10`  
     2. Here is an example for a neural network trained with injection of the all constraints via the MSE regularization 
     method:  
     `python main.py --dim 7 --train --test-num pls-7/mse-loss/100-sols/full/run-1
@@ -46,6 +46,7 @@ The PLS-7 is chosen as demonstrating example:
     --validation-size 0 --patience 10 --lmbd 1`  
     You can compute the random assigner feasibility adding the `--rnd`. You can assist both the loaded model and the 
     random assigner using the `--use-prop` flag.
+    Test results are saved in a subdirectory of `plots`.
 
 5) Generate the solutions starting from an empty partial solutions.  
     1. Generate `n` empty partial solutions:  
