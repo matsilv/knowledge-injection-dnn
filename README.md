@@ -7,7 +7,7 @@ The followings are the steps to reproduce results. **The file names must be as i
 The PLS-7 is chosen as demonstrating example:
 
 1)  Create the CSV file with the solutions pool:
-    `datasetgenerator/plsgen.py -o 7 -n 10000 -f bin > pls7_10k.csv`.
+    `python datasetgenerator/plsgen.py -o 7 -n 10000 -f bin > pls7_10k.csv`.
 2)  Create the CSV file with the partial solutions - assignments pairs.  
     1) Create the file with uniques partial solutions - assignments pairs.  
     `python datasetgenerator/dataprocessing.py -n pls7_10k`  
@@ -55,6 +55,6 @@ The PLS-7 is chosen as demonstrating example:
     2. Generate the solutions using the trained models:  
     `cd datasetgenerator`  
     `python plstest.py ../solutions/pls7/empty_sols.csv --input-format bin --output-format bin --seed 1 
-    --search-strategy snail-dnn  --max-size 5000 --dnn-fstem ../models/--test-num pls-7/model-agnostic/all-ts/run-1 
+    --search-strategy snail-dnn  --max-size 5000 --dnn-fstem ../models/pls-7/model-agnostic/all-ts/run-1 
     --rm-rows-constraints --rm-columns-constraints >  ../solutions/pls7/model_agnostic_all_ts_no_prop.csv`  
     3. To count the constraints violations use the `read_solutions_from_csv` method from `utility.py`.  

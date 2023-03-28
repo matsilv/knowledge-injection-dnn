@@ -1,5 +1,0 @@
-batch_size: 2048
-patience: 10
-tf seed: 2
-validation size: 5000
-lambda: 10.0

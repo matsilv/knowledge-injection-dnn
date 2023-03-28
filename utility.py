@@ -12,6 +12,7 @@ import csv
 import seaborn as sns
 import matplotlib.pyplot as plt
 import math
+import tensorflow as tf
 
 ########################################################################################################################
 
@@ -55,7 +56,7 @@ class PLSInstance:
         Public method to set the square.
         :param square: the square as numpy array of shape (dim, dim, dim)
         :param forward: True if you want to apply forward checking
-        :return: True if the assignement is feasible, False otherwise
+        :return: True if the assignment is feasible, False otherwise
         """
 
         self.square = square
@@ -531,8 +532,20 @@ def compute_feasibility_from_predictions(X, preds, dim):
     feas_count = 0
 
     for x, pred in zip(X, preds):
-        # Create a problem instance with current training example for net prediction
-        square = np.reshape(x, (dim, dim, dim))
+
+        # NOTE: the input can be a flattened one-hot encoding or a 2D representation
+
+        # If it is a flattened representation...
+        if len(x.shape) == 1:
+            # Create a problem instance with current training example for net prediction
+            square = np.reshape(x, (dim, dim, dim))
+        # ...if it is a 2D representation
+        elif len(x.shape) == 3:
+            square = from_2d_to_one_hot(array_to_reshape=x, dim=dim)
+
+        else:
+            raise Exception("Illegal input dimension")
+
         pls = PLSInstance(n=dim)
         pls.square = square.copy()
         # assert pls.__check_constraints__(), "Constraints should be verified before assignment"
@@ -594,6 +607,51 @@ def make_subplots(nested_path, n_subplots, labels, titles, pls_sizes=[7, 10, 12]
 
         ax.set_title(titles[subp_idx], fontweight='bold', fontsize='18')
     plt.show()
+
+########################################################################################################################
+
+
+# NOTE: function to convert a flattened one-hot encoding to a 2D representation
+def from_one_hot_to_2d(flattened_array: np.ndarray) -> np.ndarray:
+    """
+    Convert an array from a flattened one-hot encoding to a 2D representation.
+    """
+
+    # Shape of the flattened array
+    flattened_dim = flattened_array.shape[1]
+    # Number of entries in the array
+    array_length = flattened_array.shape[0]
+    # The unraveled dimension
+    unravel_dim = int(np.cbrt(flattened_dim))
+    # Sanity check
+    assert unravel_dim**3 == flattened_dim, "Flattened dimension must be a perfect cube"
+
+    # Unraveled array
+    unraveled_array = flattened_array.reshape(array_length, unravel_dim, unravel_dim, unravel_dim)
+    # From one-hot encoding to integer (of each cell value)
+    unraveled_array = np.argmax(unraveled_array, axis=2) + np.sum(unraveled_array, axis=2)
+
+    return unraveled_array
+
+########################################################################################################################
+
+
+def from_2d_to_one_hot(array_to_reshape: np.ndarray, dim: int):
+    """
+    Conver a numpy array from 2D to flattened one-hot representation.
+    """
+    # Remove the fake channel dimension
+    square = np.squeeze(array_to_reshape)
+    # Convert the value dimension to one-hot
+    square = tf.one_hot(square, axis=-1, depth=dim + 1)
+    # Get back to numpy
+    square = square.numpy()
+    # Empty cell must be converted as a list of 0s
+    square = square[:, :, 1:]
+    # Convert to int since the solver requires integers
+    square = square.astype(np.int32)
+
+    return square
 
 ########################################################################################################################
 

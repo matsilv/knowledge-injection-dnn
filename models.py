@@ -5,25 +5,24 @@
 """
 
 import tensorflow as tf
-from utility import compute_feasibility_from_predictions, visualize
-
+import numpy as np
+from collections import namedtuple
+from utility import compute_feasibility_from_predictions
+from tensorflow.keras.layers import Conv2D, Flatten, Dense, BatchNormalization, Reshape
 
 ########################################################################################################################
 
 
+# NOTE: here we define an abstract class for architectures that solve the PLS
 class MyModel(tf.keras.Model):
     def __init__(self,
-                 num_layers,
-                 num_hidden,
-                 input_shape,
+                 hidden_layers,
                  output_dim,
                  method='agnostic',
                  lmbd=1.0):
         """
         tk.keras.Model subclassing to implement the SBR-inspired regularization.
-        :param num_layers: number of hidden layers; as integer.
-        :param num_hidden: number of hidden units for each layer; as a list of integers.
-        :param input_shape: input shape required by tf.keras; as a tuple.
+        :param hidden_layers: list of Layer; the hidden layers of the neural architecture.
         :param output_dim: number of output neurons; as integer.
         :param method: method to be applied to the NN; as string.
         :param lmbd: lambda for SBR-inspired loss term.
@@ -31,8 +30,7 @@ class MyModel(tf.keras.Model):
 
         super(MyModel, self).__init__(name="mymodel")
 
-        self.num_layers = num_layers
-        self.num_hidden = num_hidden
+        self.hidden_layers = hidden_layers
         self.output_dim = output_dim
 
         available_methods = ['agnostic', 'sbrinspiredloss', 'negative', 'binary']
@@ -43,20 +41,23 @@ class MyModel(tf.keras.Model):
         # Lambda for SBR-inspired loss term
         self.lmbd = lmbd
 
-        # Build the neural net model
-        self._define_model(input_shape)
+        # Define the model
+        self._define_model()
 
         # Define the optimizer
         self._define_optimizer()
 
-    def _define_model(self, input_shape):
+        # Visualize the model
+        self.model.summary()
 
+    # NOTE: We can just move the model architecture definition outside this class
+    def _define_model(self):
         self.model = tf.keras.Sequential()
 
-        self.model.add(tf.keras.layers.Dense(self.num_hidden[0], activation=tf.nn.relu, input_shape=input_shape))
-        for i in range(1, self.num_layers):
-            self.model.add(tf.keras.layers.Dense(self.num_hidden[i], activation=tf.nn.relu))
-        self.model.add(tf.keras.layers.Dense(self.output_dim))
+        for layer in self.hidden_layers:
+            self.model.add(layer)
+
+        self.model.add(Dense(self.output_dim))
 
     def _define_optimizer(self):
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
@@ -198,24 +199,8 @@ class MyModel(tf.keras.Model):
 
             # Training loop - using batches
             for x, y, p in train_ds:
-
-                y = tf.one_hot(y, depth=dim**3, dtype=tf.int8)
+                y = tf.one_hot(y, depth=dim ** 3, dtype=tf.int8)
                 y = tf.reshape(y, [y.shape[0], -1])
-
-                '''idx = 0
-                x_numpy = x.numpy()
-                y_numpy = y.numpy()
-                p_numpy = p.numpy()
-                p_numpy = p_numpy[idx].reshape(dim, dim, dim)
-                visualize(x_numpy[idx].reshape(dim, dim, dim))
-                print()
-                visualize(y_numpy[idx].reshape(dim, dim, dim))
-                print()
-                for i in range(dim):
-                    for j in range(dim):
-                        print(p_numpy[i, j])
-                    print()
-                exit()'''
 
                 loss_value, cross_entropy_loss, sbr_inspired_loss = self.grad(x, y, p)
 
@@ -242,7 +227,7 @@ class MyModel(tf.keras.Model):
                     preds = self.model(x_val)
 
                     if use_prop:
-                       preds = preds * (1 - p_val)
+                        preds = preds * (1 - p_val)
 
                     feas = compute_feasibility_from_predictions(x_val, preds, dim)
                     print("Current feasibility: {} | Best feasibility: {}".format(feas, best_feas))
@@ -250,7 +235,7 @@ class MyModel(tf.keras.Model):
                     # If last checkpoint validation feasibility was higher than current one, then stop training
                     if feas <= best_feas:
                         count_not_improved += 1
-                        print("{} times the feasibility has not improven".format(count_not_improved))
+                        print("{} times the feasibility has not improved".format(count_not_improved))
                     else:
                         best_feas = feas
                         count_not_improved = 0
@@ -273,3 +258,4 @@ class MyModel(tf.keras.Model):
 
         return history
 
+########################################################################################################################

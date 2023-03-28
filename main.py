@@ -5,12 +5,14 @@ Main program.
 """
 
 import os
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-from utility import PLSInstance, PLSSolver, random_assigner
+from utility import PLSInstance, PLSSolver, random_assigner, from_one_hot_to_2d, from_2d_to_one_hot
 from models import MyModel
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
+from tensorflow.keras.layers import Dense, Conv2D, Flatten
 import csv
 import argparse
 import time
@@ -57,6 +59,8 @@ parser.add_argument("--leave-columns-domains", action="store_true", default=Fals
 parser.add_argument("--num-sol", type=str, default="10k",
                     help="Number of solutions from which the training set has been generated; thousands are expressed "
                          + "with k (for example 10000=10k).")
+parser.add_argument("--model", choices=["fnn", "cnn"], required=True,
+                    help="Choose the model architecture.")  # TODO: change default
 parser.add_argument("--model-type", default="agnostic", choices=["agnostic", "sbrinspiredloss", "negative", "binary"],
                     help="Choose the model type. 'agnostic' is the model-agnostic baseline. 'sbrinspiredloss', "
                          + "'negative' and 'binary' are relatively the mse, negative and binary-cross entropy versions"
@@ -73,11 +77,12 @@ parser.add_argument("--patience", default=10, type=int,
                          "feasibility after which training is stopped.")
 
 args = parser.parse_args()
+print(args)
 
 # Problem dimension.
 DIM = int(args.dim)
 
-COLUMN_TYPES = [int() for _ in range(DIM**3)]
+COLUMN_TYPES = [int() for _ in range(DIM ** 3)]
 
 # Set training or test mode.
 TRAIN = args.train
@@ -170,6 +175,14 @@ if VAL_SIZE > 0:
     val_indexes = np.random.choice(np.arange(0, X_val.shape[0]), size=VAL_SIZE, replace=False)
     X_val = X_val[val_indexes]
     P_val = P_val[val_indexes]
+
+    # NOTE: if the model architecture is convolutional then we switch from the one-hot encoding to a 2D dimensional
+    #  representation
+    if args.model == 'cnn':
+        X_val = from_one_hot_to_2d(flattened_array=X_val)
+        # We also add the fake channel dimension
+        X_val = np.expand_dims(X_val, axis=-1)
+
     validation_set = (X_val, P_val)
 
 # Load training examples
@@ -178,19 +191,26 @@ print("Loading features from {}...".format(features_filepath))
 start = time.time()
 X = pd.read_csv(features_filepath, sep=',', header=None, nrows=MAX_SIZE, dtype=np.int8).values
 end = time.time()
-print("Elapsed {} seconds, {} GB required".format((end - start), X.nbytes / 10**9))
+print("Elapsed {} seconds, {} GB required".format((end - start), X.nbytes / 10 ** 9))
 print("Number of rows: {}".format(X.shape[0]))
+
+# NOTE: if the model architecture is convolutional then we switch from the one-hot encoding to a 2D dimensional
+#  representation
+if args.model == 'cnn':
+    X = from_one_hot_to_2d(flattened_array=X)
+    # We also add the fake channel dimension
+    X = np.expand_dims(X, axis=-1)
 
 labels_filepath = "datasets/pls{}/assignments_{}_{}.csv".format(DIM, NUM_SOL, mode)
 print("Loading labels from {}...".format(labels_filepath))
 start = time.time()
 Y = pd.read_csv(labels_filepath, sep=',', header=None, nrows=MAX_SIZE, dtype=np.int32).values
 end = time.time()
-print("Elapsed {} seconds, {} GB required".format((end - start), Y.nbytes / 10**9))
+print("Elapsed {} seconds, {} GB required".format((end - start), Y.nbytes / 10 ** 9))
 
 # Create penalties for the examples
 if MODEL_TYPE == 'agnostic' and not args.use_prop:
-    P = np.zeros_like(X, dtype=np.int8)
+    P = np.zeros((len(X), DIM**3), dtype=np.int8)
 else:
     if not args.leave_columns_domains:
         penalties_filepath = "datasets/pls{}/domains_{}_{}.csv".format(DIM, mode, NUM_SOL)
@@ -201,7 +221,7 @@ else:
     start = time.time()
     P = pd.read_csv(penalties_filepath, sep=',', header=None, nrows=MAX_SIZE, dtype=np.int8).values
 end = time.time()
-print("Elapsed {} seconds, {} GB required".format((end - start), P.nbytes / 10**9))
+print("Elapsed {} seconds, {} GB required".format((end - start), P.nbytes / 10 ** 9))
 
 # Remove validation samples from the training set
 if val_indexes is not None:
@@ -213,9 +233,28 @@ if val_indexes is not None:
 dataset = tf.data.Dataset.from_tensor_slices((X, Y, P)).shuffle(10000).batch(BATCH_SIZE)
 
 # Create the model
-model = MyModel(num_layers=2,
-                num_hidden=[512, 512],
-                input_shape=X.shape[1:],
+if args.model == 'fnn':
+    layers = [
+        Dense(input_shape=X.shape[1:],
+              units=16,
+              activation='relu'),
+        Dense(units=16,
+              activation='relu')
+    ]
+elif args.model == 'cnn':
+    layers = [
+        Conv2D(input_shape=X.shape[1:],
+               filters=16,
+               kernel_size=(3, 3),
+               activation='relu'),
+        Flatten(),
+        Dense(units=16,
+              activation='relu')
+    ]
+else:
+    raise Exception("Model type not vali")
+
+model = MyModel(hidden_layers=layers,
                 output_dim=DIM ** 3,
                 method=MODEL_TYPE,
                 lmbd=args.lmbd)
@@ -247,7 +286,7 @@ if TRAIN:
     exit(0)
 
 else:
-     model.model = tf.saved_model.load("models/{}".format(model_name))
+    model.model = tf.saved_model.load("models/{}".format(model_name))
 
 ################################################################################
 
@@ -255,7 +294,7 @@ else:
 
 # Make predictions
 tensor_X = X.astype(np.float32)
-predict_val = model.predict_from_saved_model(tensor_X).numpy()
+predict_val = tf.nn.softmax(model.model(tensor_X)).numpy()
 
 # Prune values according to constraints propagator if required
 if args.use_prop:
@@ -280,6 +319,10 @@ acc_rand = 0
 # Compute accuracy grouped by number of assigned variables
 preds = []
 for x, pred, y, d in zip(X, predict_val, Y, P):
+
+    # NOTE: if the model is convolutional then get the input back to the flattened one-hot representation
+    if args.model == 'cnn':
+        x = from_2d_to_one_hot(x, dim=DIM)
 
     if count % 1000 == 0:
         print("Examined {} instances".format(count))
@@ -334,7 +377,7 @@ for x, pred, y, d in zip(X, predict_val, Y, P):
         square = np.reshape(x, (DIM, DIM, DIM))
         pls = PLSInstance(n=DIM)
         pls.square = square.copy()
-        #assert pls.__check_constraints__(), "Constraints should be verified before assignment"
+        # assert pls.__check_constraints__(), "Constraints should be verified before assignment"
 
         # Make the random assignment
         rand_assignment = np.unravel_index(rand_assignment, shape=(DIM, DIM, DIM))
@@ -358,7 +401,7 @@ for x, pred, y, d in zip(X, predict_val, Y, P):
 
     # Save results checkpoint
     if count % 1000 == 0:
-      
+
         feasibility = list((feas_by_num_assigned / (tot_by_num_assigned + 1e-8))[1:])
 
         if not args.use_prop:

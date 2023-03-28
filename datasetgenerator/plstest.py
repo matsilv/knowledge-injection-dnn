@@ -30,6 +30,7 @@ import sys
 sys.path.insert(1, '{}/../'.format(cwd))
 from models import MyModel
 from datasetgenerator import common, search
+from utility import from_one_hot_to_2d
 
 ########################################################################################################################
 
@@ -81,11 +82,12 @@ def read_pls(s, frm):
 
 
 class DNNDecisionBuilder(pycp.PyDecisionBuilder):
-    def __init__(self, X, dnn):
+    def __init__(self, X, dnn, model_type):
         pycp.PyDecisionBuilder.__init__(self)
         self.X = X
         self.dnn = dnn
         self.n = int(round(math.sqrt(len(X))))
+        self.model_type = model_type
 
     def Next(self, slv):
         # If all variables are bound, the search is over
@@ -98,10 +100,17 @@ class DNNDecisionBuilder(pycp.PyDecisionBuilder):
             if x.Bound():
                 val[x.Value()-1] = 1
             sol.extend(val)
+
         # Query the DNN to obtain var-value pair rankings
-        tensor_sol = np.asarray(sol, dtype=np.float32).reshape(1, n ** 3)
-        scores = self.dnn.predict_from_saved_model(tensor_sol).numpy()[0]
+        if self.model_type == 'cnn':
+            tensor_sol = np.asarray(sol, dtype=np.float32).reshape(-1, n ** 3)
+            tensor_sol = from_one_hot_to_2d(tensor_sol)
+        elif self.model_type == 'fnn':
+            tensor_sol = np.asarray(sol, dtype=np.float32).reshape(1, n ** 3)
+
+        scores = tf.nn.softmax(self.dnn(tensor_sol)).numpy()[0]
         assert scores.shape == (n ** 3,), "Shape is {}".format(scores.shape)
+
         maxscore = None
         var, val = None, None
         for i, x in enumerate(self.X):
@@ -223,6 +232,7 @@ if __name__ == '__main__':
                         help='Remove columns constraints to the solver')
     parser.add_argument('--max-size', type=int, default=10000,
             help='Maximum number of input solutions to be loaded')
+    parser.add_argument('--model', required=True, choices=['fnn', 'cnn'])
 
     # Parse command line options
     args = parser.parse_args()
@@ -289,9 +299,7 @@ if __name__ == '__main__':
         if args.dnn_fstem is None:
             raise ValueError('Missing file stem for the DNN')
 
-        model = MyModel(num_layers=2, num_hidden=[512, 512], input_shape=(n ** 3,), output_dim=n ** 3, method='agnostic')
-        # model.load_weights(args.dnn_fstem)
-        model.model = tf.saved_model.load(args.dnn_fstem)
+        model = tf.keras.models.load_model(args.dnn_fstem)
         dnn = model
 
     # Prepare a data structure to store global information abut search
@@ -308,7 +316,7 @@ if __name__ == '__main__':
     elif args.search_strategy == 'snail-ms':
         db = search.SnailMinSizeDecisionBuilder(flatX)
     elif args.search_strategy == 'snail-dnn':
-        db = DNNDecisionBuilder(flatX, dnn)
+        db = DNNDecisionBuilder(flatX, dnn, model_type=args.model)
     elif args.search_strategy == 'snail-msdnn':
         db = MSDNNDecisionBuilder(flatX, dnn)
     # Build a custom decision builder to store a solution and trigger a fail
